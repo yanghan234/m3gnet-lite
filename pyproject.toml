@@ -1,5 +1,5 @@
 [project]
-name = "python-project-template"
+name = "m3gnet"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [project.scripts]
-project-template = "python_project_template:main"
+m3gnet = "m3gnet:main"
 
 [dependency-groups]
 dev = [
@@ -112,5 +112,5 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.ruff.lint.isort]
-known-first-party = ["python_project_template"]
+known-first-party = ["m3gnet"]
 
