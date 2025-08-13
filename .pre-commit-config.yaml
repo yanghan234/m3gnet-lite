@@ -1,0 +1,14 @@
+# .pre-commit-config.yaml
+
+repos:
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version. Must be kept in sync with the version in pyproject.toml
+    rev: v0.5.5
+    hooks:
+        # Run the linter.
+        - id: ruff
+          args: [--fix]
+          types_or: [python, pyi  ]
+        # Run the formatter.
+        - id: ruff-format
+          types_or: [python, pyi]
