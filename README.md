@@ -1,3 +1,3 @@
-# m3gnet
+# M3GNet
 
-This is a template for quickly creating Python projects with modern tooling and best practices.
+This is a re-implementation of the M3GNet architecture for learning purpose.
