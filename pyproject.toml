@@ -132,6 +132,9 @@ unfixable = []
 "tests/**/*.py" = ["S101", "C901"]
 "__init__.py" = ["F401"]
 
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.
