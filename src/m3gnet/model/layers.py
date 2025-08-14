@@ -1,7 +1,7 @@
 import torch
 from torch import nn
-from torch_geometric.data import Data
 from torch_cluster import radius_graph
+from torch_geometric.data import Data
 
 
 class RadiusGraphLayer(nn.Module):
@@ -14,6 +14,7 @@ class RadiusGraphLayer(nn.Module):
         three_body_cutoff: Cutoff radius for three-body interactions. Default is 4.0.
         device: Device to use for the graph construction. Default is "cpu".
     """
+
     def __init__(
         self,
         cutoff: float = 5.0,
@@ -35,12 +36,14 @@ class RadiusGraphLayer(nn.Module):
         Convert a set of atomic coordinates and cell parameters into a PyG graph.
         """
         edge_index, edge_dist = self._get_edge_distances(pos, batch)
-        data = Data(
+        if self.enable_three_body:
+            # TODO: Implement three-body interactions
+            pass
+        return Data(
             pos=pos,
             edge_index=edge_index,
             edge_attr=edge_dist,
         )
-        return data
 
     def _get_edge_distances(
         self,
@@ -61,3 +64,14 @@ class RadiusGraphLayer(nn.Module):
         edge_dist = torch.norm(pos[edge_index[0]] - pos[edge_index[1]], dim=1)
         return edge_index, edge_dist
 
+    def __repr__(self) -> str:
+        return f"""
+        RadiusGraphLayer(
+            cutoff={self.cutoff},
+            enable_three_body={self.enable_three_body},
+            three_body_cutoff={self.three_body_cutoff}
+        )
+        """
+
+    def __str__(self) -> str:
+        return self.__repr__()
