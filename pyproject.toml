@@ -46,6 +46,7 @@ m3gnet = "m3gnet:main"
 dev = [
     "ipython>=9.4.0",
     "jupyter>=1.1.1",
+    "mattersim>=1.2.0",
     "pre-commit>=4.3.0",
     "pytest>=8.4.1",
     "ruff>=0.12.8",
