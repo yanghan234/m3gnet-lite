@@ -36,7 +36,7 @@ class GraphConverter:
         """
         Convert a set of atomic coordinates and cell parameters into a PyG graph.
         """
-        if self.pbc and not cell:
+        if self.pbc and cell is None:
             raise ValueError("Cell parameters are required when pbc is True.")
 
         edge_index, edge_dist, _ = compute_fixed_radius_graph(

@@ -28,14 +28,27 @@ def compute_fixed_radius_graph(
             The edge index, distances, and offsets.
     """
 
-    if pbc and not cell:
+    if pbc and cell is None:
         raise ValueError("Cell parameters are required when pbc is True.")
+
+    # Handle empty input case
+    if pos.shape[0] == 0:
+        edge_index = torch.empty((2, 0), dtype=torch.long)
+        distances = np.empty(0, dtype=np.float64)
+        offsets = np.empty((0, 3), dtype=np.int64)
+        return edge_index, distances, offsets
 
     # find_points_in_spheres defined in pymatgen.optimization.neighbors
     # requires continous memory layout, because it calls compiled external C program
     _pos = np.ascontiguousarray(pos)
-    _cell = np.ascontiguousarray(cell)
-    _pbc = np.array([1] * 3)
+
+    if pbc:
+        _cell = np.ascontiguousarray(cell)
+        _pbc = np.array([1] * 3)
+    else:
+        # For non-PBC case, provide a dummy large cell
+        _cell = np.eye(3) * 1000.0  # Large cubic cell
+        _pbc = np.array([0] * 3)
 
     (
         center_indices,
