@@ -1,5 +1,6 @@
 import numpy as np
 from ase.atoms import Atoms
+from pymatgen.core.structure import Structure
 from torch_geometric.data import Data
 
 from .utils import compute_fixed_radius_graph, compute_threebody_indices
@@ -78,3 +79,11 @@ class GraphConverter:
         Convert an ASE Atoms object into a PyG graph.
         """
         return self.convert(pos=atoms.positions, cell=atoms.cell, **kwargs)
+
+    def convert_pymatgen_structure(self, structure: Structure, **kwargs) -> Data:
+        """
+        Convert a PyMatGen Structure object into a PyG graph.
+        """
+        return self.convert(
+            pos=structure.cart_coords, cell=structure.lattice.matrix, **kwargs
+        )
