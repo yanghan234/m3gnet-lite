@@ -1494,9 +1494,7 @@ dependencies = [
     { name = "torch", version = "2.8.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "python_full_version < '3.14' and sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(python_full_version >= '3.14' and sys_platform != 'linux') or sys_platform == 'win32'" },
     { name = "torch", version = "2.8.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "sys_platform == 'linux'" },
-    { name = "torch-cluster" },
     { name = "torch-geometric" },
-    { name = "torch-sparse" },
     { name = "torchvision", version = "0.23.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "python_full_version < '3.14' and sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "torchvision", version = "0.23.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(python_full_version >= '3.14' and sys_platform != 'linux') or sys_platform == 'win32'" },
     { name = "torchvision", version = "0.23.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "sys_platform == 'linux'" },
@@ -1520,9 +1518,7 @@ requires-dist = [
     { name = "pymatgen", specifier = ">=2025.6.14" },
     { name = "torch", marker = "sys_platform != 'linux'", specifier = ">=2.8.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.8.0", index = "https://download.pytorch.org/whl/cu128" },
-    { name = "torch-cluster", specifier = ">=1.6.3" },
     { name = "torch-geometric", specifier = ">=2.6.1" },
-    { name = "torch-sparse", specifier = ">=0.6.18" },
     { name = "torchvision", marker = "sys_platform != 'linux'", specifier = ">=0.23.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torchvision", marker = "sys_platform == 'linux'", specifier = ">=0.23.0", index = "https://download.pytorch.org/whl/cu128" },
 ]
@@ -3434,17 +3430,6 @@ wheels = [
 ]
 
 [[package]]
-name = "torch-cluster"
-version = "1.6.3"
-source = { registry = "https://data.pyg.org/whl/torch-2.8.0+cpu.html" }
-dependencies = [
-    { name = "scipy" },
-]
-wheels = [
-    { url = "https://data.pyg.org/whl/torch-2.8.0%2Bcpu/torch_cluster-1.6.3-cp313-cp313-macosx_10_13_universal2.whl" },
-]
-
-[[package]]
 name = "torch-ema"
 version = "0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3484,17 +3469,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/10/0f/0b7710b63cf4fe09c8710db208a2c5cf66b1e09efbbcae0adc6fcf149caa/torch_runstats-0.2.0.tar.gz", hash = "sha256:bc7f32887103c820bd7cc710b9c476d1ec56a68a3ff9a42b9b56758bfb8afd97", size = 8432, upload-time = "2021-11-23T00:58:22.986Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4f/81/021f56cdddce39a04c51abfd17af52f3fba91d30b699af5e5352f8abbff6/torch_runstats-0.2.0-py3-none-any.whl", hash = "sha256:ba5a5214e1154aac8cca383943e7a9029e412f62e663002ede9c3dd19b947847", size = 8108, upload-time = "2021-11-23T00:58:21.846Z" },
-]
-
-[[package]]
-name = "torch-sparse"
-version = "0.6.18"
-source = { registry = "https://data.pyg.org/whl/torch-2.8.0+cpu.html" }
-dependencies = [
-    { name = "scipy" },
-]
-wheels = [
-    { url = "https://data.pyg.org/whl/torch-2.8.0%2Bcpu/torch_sparse-0.6.18-cp313-cp313-macosx_11_0_universal2.whl" },
 ]
 
 [[package]]
