@@ -33,3 +33,7 @@ jobs:
 
     - name: Install project in editable mode
       run: uv pip install -e .
+
+    - name: Run tests
+      run: |
+        uv run pytest -v
