@@ -8,6 +8,7 @@ from pymatgen.optimization.neighbors import find_points_in_spheres
 def compute_fixed_radius_graph(
     pos: np.ndarray,
     cell: np.ndarray | None = None,
+    *,
     pbc: bool = True,
     cutoff: float = 5.0,
     numerical_tol: float = 1e-8,
@@ -80,6 +81,7 @@ def compute_threebody_indices(
     pos: np.ndarray,
     edge_index: np.ndarray,
     edge_dist: np.ndarray,
+    *,
     three_body_cutoff: float = 3.0,
 ) -> tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
