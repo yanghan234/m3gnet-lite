@@ -6,12 +6,12 @@ from pymatgen.optimization.neighbors import find_points_in_spheres
 
 
 def compute_fixed_radius_graph(
-    pos: torch.Tensor,
-    cell: torch.Tensor | None = None,
+    pos: np.ndarray,
+    cell: np.ndarray | None = None,
     pbc: bool = True,
     cutoff: float = 5.0,
     numerical_tol: float = 1e-8,
-) -> torch.Tensor:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute a fixed radius graph.
 
@@ -32,8 +32,8 @@ def compute_fixed_radius_graph(
 
     # find_points_in_spheres defined in pymatgen.optimization.neighbors
     # requires continous memory layout, because it calls compiled external C program
-    _pos = np.ascontiguousarray(pos.cpu().numpy())
-    _cell = np.ascontiguousarray(cell.cpu().numpy())
+    _pos = np.ascontiguousarray(pos)
+    _cell = np.ascontiguousarray(cell)
     _pbc = np.array([1] * 3)
 
     (
