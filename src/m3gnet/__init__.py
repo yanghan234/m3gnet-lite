@@ -1,5 +1,5 @@
 from loguru import logger
 
+from .m3gnet import M3GNet
 
-def main() -> None:
-    logger.info("Hello from project-template!")
+__all__ = ["M3GNet"]
