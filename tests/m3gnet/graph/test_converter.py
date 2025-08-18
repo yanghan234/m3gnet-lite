@@ -61,7 +61,7 @@ class TestGraphConverter:
 
         # Check that edge distances are correct
         expected_distances = [2.0, 2.0]  # A-B and B-A distances
-        assert np.allclose(data.edge_attr, expected_distances, atol=1e-6)
+        assert np.allclose(data.edge_dist, expected_distances, atol=1e-6)
 
         # Check that positions are preserved
         assert np.allclose(data.pos, pos)
@@ -103,11 +103,11 @@ class TestGraphConverter:
         assert data.num_edges == 6
 
         # Sort edge attributes to ensure consistent ordering
-        sorted_edge_attr = np.sort(data.edge_attr)
+        sorted_edge_dist = np.sort(data.edge_dist)
 
         # Check that all distances are correct
         expected_distances = [1.0, 1.0, 1.0, 1.0, 2.0, 2.0]
-        assert np.allclose(sorted_edge_attr, expected_distances, atol=1e-6)
+        assert np.allclose(sorted_edge_dist, expected_distances, atol=1e-6)
 
     def test_3d_coordinates(self, simple_converter):
         """Test graph creation with 3D coordinates."""
@@ -132,7 +132,7 @@ class TestGraphConverter:
         # Check that the edge distance is approximately sqrt(3)
         expected_distance = np.sqrt(3.0)
         assert np.allclose(
-            data.edge_attr,
+            data.edge_dist,
             [expected_distance, expected_distance],
             atol=1e-6,
         )
@@ -156,8 +156,8 @@ class TestGraphConverter:
         assert torch.all(data.edge_index >= 0)
         assert torch.all(data.edge_index < data.num_nodes)
 
-    def test_edge_attr_format(self, simple_converter):
-        """Test that edge_attr has correct format."""
+    def test_edge_dist_format(self, simple_converter):
+        """Test that edge_dist has correct format."""
         pos = np.array(
             [
                 [0.0, 0.0, 0.0],
@@ -168,11 +168,11 @@ class TestGraphConverter:
         data = simple_converter.convert(pos=pos)
 
         # Should have 2 edge attributes (distances)
-        assert data.edge_attr.shape == (2,)
-        assert data.edge_attr.dtype == np.float64
+        assert data.edge_dist.shape == (2,)
+        assert data.edge_dist.dtype == torch.float32
 
         # All distances should be positive
-        assert np.all(data.edge_attr > 0)
+        assert torch.all(data.edge_dist > 0)
 
     def test_three_body_converter_creation(self, three_body_converter):
         """Test that three-body converter is created correctly."""
@@ -254,7 +254,7 @@ class TestGraphConverter:
         # Distance should be 5.0
         expected_distance = 5.0
         assert np.allclose(
-            data_large.edge_attr,
+            data_large.edge_dist,
             [expected_distance, expected_distance],
             atol=1e-6,
         )
@@ -316,8 +316,10 @@ class TestGraphConverter:
         """Test the convert_ase_atoms convenience method."""
         try:
             from ase import Atoms
+            from ase.calculators.calculator import NullCalculator
 
-            atoms = Atoms("H2", positions=[[0, 0, 0], [1, 0, 0]])
+            atoms = Atoms("H2", positions=[[0, 0, 0], [1, 0, 0]], cell=[10, 10, 10])
+            atoms.calc = NullCalculator()
 
             data = simple_converter.convert_ase_atoms(atoms)
 

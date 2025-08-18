@@ -69,7 +69,9 @@ class GraphConverter:
             three_body_indices = np.empty((0, 2), dtype=np.int64)
 
         return Data(
-            atomic_numbers=torch.tensor(atomic_numbers, dtype=torch.long),
+            atomic_numbers=torch.tensor(atomic_numbers, dtype=torch.long)
+            if atomic_numbers is not None
+            else torch.zeros(pos.shape[0], dtype=torch.long),
             pos=torch.tensor(pos, dtype=torch.float32),
             edge_index=torch.tensor(edge_index, dtype=torch.long),
             edge_dist=torch.tensor(edge_dist, dtype=torch.float32),
