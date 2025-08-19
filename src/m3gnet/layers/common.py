@@ -93,13 +93,10 @@ class MLP(nn.Module):
 
         if isinstance(activation, str):
             activation = [activation] * len(output_dim)
-        elif isinstance(activation, list) and len(activation) != len(output_dim):
-            raise ValueError(
-                "The number of activations must be the same as "
-                "the number of output dimensions"
-            )
+        elif isinstance(activation, list) and len(activation) == len(output_dim):
+            pass
         else:
-            raise ValueError("Invalid activation type")
+            raise ValueError("Invalid activation type or length")
 
         layers = []
         _in_dim = in_dim
