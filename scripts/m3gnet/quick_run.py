@@ -1,5 +1,4 @@
 from ase.io import read as ase_read
-from loguru import logger
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
@@ -16,9 +15,6 @@ if __name__ == "__main__":
     # create a m3gnet model
     model = M3GNet()
     for data in loader:
-        logger.info(data)
-        logger.info(data[0])
-        logger.info(data[1])
-        # # output = model(data)
+        output = model(data)
         # logger.info(output)
         break
