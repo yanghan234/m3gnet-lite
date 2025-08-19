@@ -46,9 +46,10 @@ class TestGraphConverter:
                 [5.0, 0.0, 0.0],
             ]
         )
+        cell = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]])
 
         # 2. Act
-        data = simple_converter.convert(pos=pos)
+        data = simple_converter.convert(pos=pos, cell=cell)
 
         # 3. Assert
         # We expect an edge between A and B, and B and A (undirected)
@@ -76,9 +77,10 @@ class TestGraphConverter:
                 [6.0, 0.0, 0.0],
             ]
         )
+        cell = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]])
 
         converter = GraphConverter(cutoff=1.0, pbc=False)  # Very small cutoff
-        data = converter.convert(pos=pos)
+        data = converter.convert(pos=pos, cell=cell)
 
         assert data.num_nodes == 3
         assert data.num_edges == 0
@@ -94,8 +96,9 @@ class TestGraphConverter:
                 [2.0, 0.0, 0.0],
             ]
         )
+        cell = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]])
 
-        data = large_cutoff_converter.convert(pos=pos)
+        data = large_cutoff_converter.convert(pos=pos, cell=cell)
 
         # With cutoff 6.0, all atoms should be connected
         # Expected: 6 edges (A-B, B-A, A-C, C-A, B-C, C-B)
@@ -119,8 +122,9 @@ class TestGraphConverter:
                 [3.0, 3.0, 3.0],
             ]
         )
+        cell = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]])
 
-        data = simple_converter.convert(pos=pos)
+        data = simple_converter.convert(pos=pos, cell=cell)
 
         # Distance A-B = sqrt(1² + 1² + 1²) = sqrt(3) ≈ 1.73 < 2.5
         # Distance A-C = sqrt(3² + 3² + 3²) = sqrt(27) ≈ 5.20 > 2.5
@@ -145,8 +149,9 @@ class TestGraphConverter:
                 [1.0, 0.0, 0.0],
             ]
         )
+        cell = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]])
 
-        data = simple_converter.convert(pos=pos)
+        data = simple_converter.convert(pos=pos, cell=cell)
 
         # Should have 2 edges (A->B and B->A)
         assert data.edge_index.shape == (2, 2)
@@ -164,8 +169,9 @@ class TestGraphConverter:
                 [1.0, 0.0, 0.0],
             ]
         )
+        cell = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]])
 
-        data = simple_converter.convert(pos=pos)
+        data = simple_converter.convert(pos=pos, cell=cell)
 
         # Should have 2 edge attributes (distances)
         assert data.edge_dist.shape == (2,)
@@ -189,8 +195,9 @@ class TestGraphConverter:
                 [2.0, 0.0, 0.0],
             ]
         )
+        cell = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]])
 
-        data = three_body_converter.convert(pos=pos)
+        data = three_body_converter.convert(pos=pos, cell=cell)
 
         assert isinstance(data, Data)
         assert data.num_nodes == 3
@@ -214,20 +221,21 @@ class TestGraphConverter:
                 [3.0, 0.0, 0.0],
             ]
         )
+        cell = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]])
 
         # Test with cutoff = 1.5 (should only connect adjacent atoms)
         converter_small = GraphConverter(cutoff=1.5, pbc=False)
-        data_small = converter_small.convert(pos=pos)
+        data_small = converter_small.convert(pos=pos, cell=cell)
         assert data_small.num_edges == 3 * 2  # Only 0-1, 1-2, 2-3 connections
 
         # Test with cutoff = 2.5 (should connect atoms within 2.5 distance)
         converter_medium = GraphConverter(cutoff=2.5, pbc=False)
-        data_medium = converter_medium.convert(pos=pos)
+        data_medium = converter_medium.convert(pos=pos, cell=cell)
         assert data_medium.num_edges == 5 * 2  # 0-1, 1-2, 0-2, 1-3, 2-3 connections
 
         # Test with cutoff = 4.0 (should connect all atoms)
         converter_large = GraphConverter(cutoff=4.0, pbc=False)
-        data_large = converter_large.convert(pos=pos)
+        data_large = converter_large.convert(pos=pos, cell=cell)
         assert data_large.num_edges == 6 * 2  # All possible connections
 
     def test_edge_distance_calculation(self, simple_converter):
@@ -238,15 +246,16 @@ class TestGraphConverter:
                 [3.0, 4.0, 0.0],  # Distance = 5.0
             ]
         )
+        cell = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]])
 
-        data = simple_converter.convert(pos=pos)
+        data = simple_converter.convert(pos=pos, cell=cell)
 
         # With cutoff 2.5, no edges should be created
         assert data.num_edges == 0
 
         # Test with larger cutoff
         converter_large = GraphConverter(cutoff=6.0, pbc=False)
-        data_large = converter_large.convert(pos=pos)
+        data_large = converter_large.convert(pos=pos, cell=cell)
 
         # Should have 2 edges (A->B and B->A)
         assert data_large.num_edges == 2
@@ -262,8 +271,9 @@ class TestGraphConverter:
     def test_empty_input(self, simple_converter):
         """Test behavior with empty input."""
         pos = np.empty((0, 3))
+        cell = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]])
 
-        data = simple_converter.convert(pos=pos)
+        data = simple_converter.convert(pos=pos, cell=cell)
 
         assert data.num_nodes == 0
         assert data.num_edges == 0
@@ -272,8 +282,9 @@ class TestGraphConverter:
     def test_single_atom(self, simple_converter):
         """Test behavior with single atom."""
         pos = np.array([[0.0, 0.0, 0.0]])
+        cell = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]])
 
-        data = simple_converter.convert(pos=pos)
+        data = simple_converter.convert(pos=pos, cell=cell)
 
         assert data.num_nodes == 1
         assert data.num_edges == 0  # No edges for single atom
