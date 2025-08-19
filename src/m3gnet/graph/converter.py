@@ -113,10 +113,6 @@ class GraphConverter:
                 ):
                     raise ValueError("At least one norm is zero")
 
-                # Avoid division by zero
-                norm_ij = np.where(norm_ij < 1e-8, 1.0, norm_ij)
-                norm_ik = np.where(norm_ik < 1e-8, 1.0, norm_ik)
-
                 # Normalize vectors
                 vec_ij_norm = vec_ij / norm_ij  # Shape: [num_angles, 3]
                 vec_ik_norm = vec_ik / norm_ik  # Shape: [num_angles, 3]
@@ -135,6 +131,15 @@ class GraphConverter:
                 three_body_cos_angles = cos_ijk
                 three_body_angles = angle_ijk
             else:
+                total_num_angles = 0
+                num_bonds_per_atom = np.zeros(pos.shape[0], dtype=np.int64)
+                num_angles_per_atom = np.zeros(pos.shape[0], dtype=np.int64)
+                num_angles_on_central_atom = np.zeros(
+                    edge_index.shape[1], dtype=np.int64
+                )
+                norm_ij = np.array([], dtype=np.float64)
+                norm_ik = np.array([], dtype=np.float64)
+                three_body_indices = np.empty((0, 2), dtype=np.int64)
                 three_body_cos_angles = np.array([], dtype=np.float64)
                 three_body_angles = np.array([], dtype=np.float64)
         else:
@@ -142,8 +147,11 @@ class GraphConverter:
             num_bonds_per_atom = np.zeros(pos.shape[0], dtype=np.int64)
             num_angles_per_atom = np.zeros(pos.shape[0], dtype=np.int64)
             num_angles_on_central_atom = np.zeros(edge_index.shape[1], dtype=np.int64)
+            norm_ij = np.array([], dtype=np.float64)
+            norm_ik = np.array([], dtype=np.float64)
             three_body_indices = np.empty((0, 2), dtype=np.int64)
             three_body_cos_angles = np.array([], dtype=np.float64)
+            three_body_angles = np.array([], dtype=np.float64)
 
         return Data(
             atomic_numbers=torch.tensor(atomic_numbers, dtype=torch.long)
@@ -170,6 +178,8 @@ class GraphConverter:
             stress=torch.tensor(stress, dtype=torch.float32)
             if stress is not None
             else None,
+            norm_ij=torch.tensor(norm_ij, dtype=torch.float32),
+            norm_ik=torch.tensor(norm_ik, dtype=torch.float32),
             three_body_cos_angles=torch.tensor(
                 three_body_cos_angles, dtype=torch.float32
             ),
