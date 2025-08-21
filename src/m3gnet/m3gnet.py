@@ -62,6 +62,21 @@ class M3GNet(nn.Module):
         self.to(device)
 
     def forward(self, data: Data, batch: torch.Tensor | None = None) -> torch.Tensor:
+        # The edge_indices were computed for each structure, and thus the indices in
+        # the three_body_indices all start from 0. Thus, we need to add the cumsum
+        # of the number of bonds in the previous structures to the indices in
+        # the three_body_indices.
+        cumsum_bonds = data.total_num_bonds.cumsum(dim=0).detach()
+        offsets = torch.cat(
+            [
+                torch.zeros(1, device=cumsum_bonds.device, dtype=cumsum_bonds.dtype),
+                cumsum_bonds[:-1],
+            ]
+        )
+        # Repeat each offset according to the number of angles in each structure
+        offset = torch.repeat_interleave(offsets, data.total_num_angles).unsqueeze(1)
+        data.three_body_indices += offset
+
         # Get atomic and edge initial features
         atomic_features = self.atomic_embedding(data.atomic_numbers)  # noqa: F841
 
