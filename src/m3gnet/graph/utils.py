@@ -95,7 +95,7 @@ def compute_threebody_indices(
     edge_index: np.ndarray,
     edge_dist: np.ndarray,
     *,
-    three_body_cutoff: float = 3.0,
+    three_body_cutoff: float = 4.0,
 ) -> tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Given the two-body graph, compute three-body indices within the cutoff.
