@@ -22,7 +22,7 @@ class GraphConverter:
         *,
         cutoff: float = 5.0,
         pbc: bool = True,
-        three_body_cutoff: float | None = 3.0,
+        three_body_cutoff: float | None = 4.0,
     ):
         self.cutoff = cutoff
         self.pbc = pbc
