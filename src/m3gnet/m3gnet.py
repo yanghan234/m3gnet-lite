@@ -18,7 +18,7 @@ class M3GNet(nn.Module):
         max_radial_n: int = 4,  # inclusive, i.e. 4 means 0, 1, 2, 3, 4
         cutoff: float = 5.0,
         enable_three_body: bool = True,
-        three_body_cutoff: float = 3.0,
+        three_body_cutoff: float = 4.0,
         device: str | torch.device = "cpu",
         **kwargs,
     ):
