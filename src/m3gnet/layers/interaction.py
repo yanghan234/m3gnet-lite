@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch_geometric.data import Data
 
-from .common import MLP, GatedMLP
+from .common import MLP, GatedMLP, LinearLayer
 
 
 def envelope_polynomial(x: torch.Tensor, cutoff: float) -> torch.Tensor:
@@ -21,7 +21,110 @@ def envelope_polynomial(x: torch.Tensor, cutoff: float) -> torch.Tensor:
 
 
 class MainBlock(nn.Module):
-    pass
+    def __init__(
+        self,
+        *,
+        max_angular_l: int,
+        max_radial_n: int,
+        cutoff: float,
+        three_body_cutoff: float,
+        feature_dim: int,
+    ):
+        super().__init__()
+
+        self.max_angular_l = max_angular_l
+        self.max_radial_n = max_radial_n
+        self.cutoff = cutoff
+        self.three_body_cutoff = three_body_cutoff
+        self.feature_dim = feature_dim
+        self.angle_feature_dim = (max_angular_l + 1) * (max_radial_n + 1)
+
+        self.edge_update_gated_mlp = GatedMLP(
+            in_dim=3 * self.feature_dim,
+            output_dim=[self.feature_dim, self.feature_dim],
+            activation=["swish", "swish"],
+            bias=True,
+        )
+        self.initial_edge_linear_1 = LinearLayer(
+            in_dim=self.max_radial_n + 1,
+            out_dim=self.feature_dim,
+            bias=True,
+        )
+
+        self.atom_update_gated_mlp = GatedMLP(
+            in_dim=3 * self.feature_dim,
+            output_dim=[self.feature_dim, self.feature_dim],
+            activation=["swish", "swish"],
+            bias=True,
+        )
+        self.initial_edge_linear_2 = LinearLayer(
+            in_dim=self.max_radial_n + 1,
+            out_dim=self.feature_dim,
+            bias=True,
+        )
+        self.three_body_interaction = ThreeBodyInteraction(
+            max_angular_l=max_angular_l,
+            max_radial_n=max_radial_n,
+            cutoff=cutoff,
+            three_body_cutoff=three_body_cutoff,
+            feature_dim=feature_dim,
+        )
+
+    def forward(
+        self,
+        data: Data,
+        atomic_features: torch.Tensor,
+        edge_features: torch.Tensor,
+        angle_features: torch.Tensor,
+        initial_edge_features: torch.Tensor,
+    ) -> torch.Tensor:
+        edge_features = self.three_body_interaction(
+            data,
+            atomic_features,
+            edge_features,
+            angle_features,
+        )
+
+        # vectorize the edge update
+        concat_features = torch.cat(
+            [
+                atomic_features[data.edge_index[0]],  # (num_edges, feature_dim)
+                atomic_features[data.edge_index[1]],  # (num_edges, feature_dim)
+                edge_features,  # (num_edges, feature_dim)
+            ],
+            dim=-1,
+        )  # (num_edges, 3*feature_dim)
+
+        edge_updates = self.edge_update_gated_mlp(
+            concat_features
+        ) * self.initial_edge_linear_1(
+            initial_edge_features
+        )  # (num_edges, feature_dim)
+
+        edge_features += edge_updates
+
+        concat_features = torch.cat(
+            [
+                atomic_features[data.edge_index[0]],  # (num_edges, feature_dim)
+                atomic_features[data.edge_index[1]],  # (num_edges, feature_dim)
+                edge_features,  # (num_edges, feature_dim)
+            ],
+            dim=-1,
+        )  # (num_edges, 3*feature_dim)
+
+        atom_updates = self.atom_update_gated_mlp(
+            concat_features
+        ) * self.initial_edge_linear_2(
+            initial_edge_features
+        )  # (num_edges, feature_dim)
+
+        atomic_features.scatter_add_(
+            dim=0,
+            index=data.edge_index[0].unsqueeze(-1).expand(-1, self.feature_dim),
+            src=atom_updates,
+        )
+
+        return atomic_features, edge_features
 
 
 class ThreeBodyInteraction(nn.Module):
@@ -63,7 +166,6 @@ class ThreeBodyInteraction(nn.Module):
         atomic_features: torch.Tensor,
         edge_features: torch.Tensor,
         angle_features: torch.Tensor,
-        batch: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Args:
@@ -98,10 +200,10 @@ class ThreeBodyInteraction(nn.Module):
 
         # Compute envelope functions for both edges
         envelope_ij = envelope_polynomial(
-            data.edge_dist[edge_ij_indices], self.cutoff
+            data.edge_dist[edge_ij_indices], self.three_body_cutoff
         ).unsqueeze(-1)  # Shape: [num_angles, 1]
         envelope_ik = envelope_polynomial(
-            data.edge_dist[edge_ik_indices], self.cutoff
+            data.edge_dist[edge_ik_indices], self.three_body_cutoff
         ).unsqueeze(-1)  # Shape: [num_angles, 1]
 
         masks = atomic_filter_k * envelope_ij * envelope_ik
