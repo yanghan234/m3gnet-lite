@@ -322,7 +322,7 @@ class SphericalHarmonicAndRadialBasis(nn.Module):
 
         Returns:
             torch.Tensor: The spherical harmonic and radial basis functions.
-            Return shape: (num_edges, max_radial_n+1, max_angular_l+1)
+            Return shape: (num_edges, (max_radial_n+1) * (max_angular_l+1))
         """
         r_scaled = r / self.cutoff
 
@@ -346,7 +346,9 @@ class SphericalHarmonicAndRadialBasis(nn.Module):
 
         # move the last index to the first index but keep the other
         # two indices in the same order
-        return shrb.permute(2, 0, 1)
+        return shrb.permute(2, 0, 1).reshape(
+            -1, (self.max_radial_n + 1) * (self.max_angular_l + 1)
+        )
 
 
 class SmoothBesselBasis(nn.Module):

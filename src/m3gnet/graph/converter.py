@@ -22,7 +22,7 @@ class GraphConverter:
         *,
         cutoff: float = 5.0,
         pbc: bool = True,
-        three_body_cutoff: float | None = 3.0,
+        three_body_cutoff: float | None = 4.0,
     ):
         self.cutoff = cutoff
         self.pbc = pbc
@@ -163,6 +163,7 @@ class GraphConverter:
             edge_offsets=torch.tensor(edge_offsets, dtype=torch.float32),
             edge_offsets_coeff=torch.tensor(edge_offsets_coeff, dtype=torch.float32),
             three_body_indices=torch.tensor(three_body_indices, dtype=torch.long),
+            total_num_bonds=torch.tensor(edge_index.shape[1], dtype=torch.long),
             num_bonds_per_atom=torch.tensor(num_bonds_per_atom, dtype=torch.long),
             num_angles_per_atom=torch.tensor(num_angles_per_atom, dtype=torch.long),
             num_angles_on_central_atom=torch.tensor(
