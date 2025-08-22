@@ -364,7 +364,7 @@ def test_converter_initialization_parameters():
     converter_default = GraphConverter()
     assert converter_default.cutoff == 5.0
     assert converter_default.pbc is True
-    assert converter_default.three_body_cutoff == 3.0
+    assert converter_default.three_body_cutoff == 4.0
 
     # Test custom values
     converter_custom = GraphConverter(cutoff=10.0, pbc=False, three_body_cutoff=8.0)
