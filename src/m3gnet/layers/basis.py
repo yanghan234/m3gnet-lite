@@ -299,11 +299,11 @@ class SphericalHarmonicAndRadialBasis(nn.Module):
     ):
         super().__init__()
 
-        if max_angular_l < 0 or max_angular_l > 4:
-            raise ValueError("max_angular_l must be between 0 and 4.")
+        if max_angular_l < 0 or max_angular_l > 5:
+            raise ValueError("max_angular_l must be between 0 and 5.")
 
-        if max_radial_n < 0 or max_radial_n > 4:
-            raise ValueError("max_radial_n must be between 0 and 4.")
+        if max_radial_n < 0 or max_radial_n > 5:
+            raise ValueError("max_radial_n must be between 0 and 5.")
 
         if cutoff <= 0:
             raise ValueError("cutoff must be greater than 0.")
@@ -322,16 +322,16 @@ class SphericalHarmonicAndRadialBasis(nn.Module):
 
         Returns:
             torch.Tensor: The spherical harmonic and radial basis functions.
-            Return shape: (num_edges, (max_radial_n+1) * (max_angular_l+1))
+            Return shape: (num_edges, max_radial_n * max_angular_l)
         """
         r_scaled = r / self.cutoff
 
-        shrb = torch.zeros(self.max_radial_n + 1, self.max_angular_l + 1, r.shape[0])
-        for angluar_l in range(self.max_angular_l + 1):
+        shrb = torch.zeros(self.max_radial_n, self.max_angular_l, r.shape[0])
+        for angluar_l in range(self.max_angular_l):
             angular_ = real_spherical_harmonics_m0(
                 torch.cos(theta), angluar_l
             ).unsqueeze(-1)
-            for radial_n in range(self.max_radial_n + 1):
+            for radial_n in range(self.max_radial_n):
                 z_ln = spherical_bessel_zeros(angluar_l, radial_n)
                 prefactor = torch.tensor(
                     np.sqrt(2.0 / self.cutoff**3) / spherical_jn(angluar_l + 1, z_ln)
@@ -347,7 +347,7 @@ class SphericalHarmonicAndRadialBasis(nn.Module):
         # move the last index to the first index but keep the other
         # two indices in the same order
         return shrb.permute(2, 0, 1).reshape(
-            -1, (self.max_radial_n + 1) * (self.max_angular_l + 1)
+            -1, (self.max_radial_n) * (self.max_angular_l)
         )
 
 
@@ -365,22 +365,18 @@ class SmoothBesselBasis(nn.Module):
         self.device = device
 
         # generate temporary parameters
-        en = torch.zeros(max_radial_n + 1, dtype=torch.float32, device=device)
-        for n in range(max_radial_n + 1):
+        en = torch.zeros(max_radial_n, dtype=torch.float32, device=device)
+        for n in range(max_radial_n):
             en[n] = n**2 * (n + 2) ** 2 / (4 * (n + 1) ** 4 + 1)
         self.register_buffer("en", en)
 
-        dn = torch.arange(max_radial_n + 1, dtype=torch.float32, device=device)
-        for n in range(max_radial_n + 1):
+        dn = torch.arange(max_radial_n, dtype=torch.float32, device=device)
+        for n in range(max_radial_n):
             dn[n] = 1.0 - en[n] / dn[n - 1] if n > 0 else 1.0
         self.register_buffer("dn", dn)
 
-        n_plus_1_factor = [
-            (n + 1) * np.pi / self.cutoff for n in range(max_radial_n + 1)
-        ]
-        n_plus_2_factor = [
-            (n + 2) * np.pi / self.cutoff for n in range(max_radial_n + 1)
-        ]
+        n_plus_1_factor = [(n + 1) * np.pi / self.cutoff for n in range(max_radial_n)]
+        n_plus_2_factor = [(n + 2) * np.pi / self.cutoff for n in range(max_radial_n)]
         self.register_buffer(
             "n_plus_1_factor",
             torch.tensor(n_plus_1_factor, dtype=torch.float32, device=device),
@@ -398,7 +394,7 @@ class SmoothBesselBasis(nn.Module):
             * (n + 1)
             * (n + 2)
             / np.sqrt((n + 1) ** 2 + (n + 2) ** 2)
-            for n in range(max_radial_n + 1)
+            for n in range(max_radial_n)
         ]
         self.register_buffer(
             "fn_factor", torch.tensor(fn_factor, dtype=torch.float32, device=device)
@@ -421,11 +417,9 @@ class SmoothBesselBasis(nn.Module):
             (num_edges, max_radial_n)
         """
 
-        bessel_basis = torch.zeros(
-            x.shape[0], self.max_radial_n + 1, device=self.device
-        )
+        bessel_basis = torch.zeros(x.shape[0], self.max_radial_n, device=self.device)
 
-        for n in range(self.max_radial_n + 1):
+        for n in range(self.max_radial_n):
             r_with_plus1_factor = x * self.n_plus_1_factor[n]
             r_with_plus2_factor = x * self.n_plus_2_factor[n]
 

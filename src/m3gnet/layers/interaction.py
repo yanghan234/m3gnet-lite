@@ -37,7 +37,7 @@ class MainBlock(nn.Module):
         self.cutoff = cutoff
         self.three_body_cutoff = three_body_cutoff
         self.feature_dim = feature_dim
-        self.angle_feature_dim = (max_angular_l + 1) * (max_radial_n + 1)
+        self.angle_feature_dim = max_angular_l * max_radial_n
 
         self.edge_update_gated_mlp = GatedMLP(
             in_dim=3 * self.feature_dim,
@@ -46,7 +46,7 @@ class MainBlock(nn.Module):
             bias=True,
         )
         self.initial_edge_linear_1 = LinearLayer(
-            in_dim=self.max_radial_n + 1,
+            in_dim=self.max_radial_n,
             out_dim=self.feature_dim,
             bias=True,
         )
@@ -58,7 +58,7 @@ class MainBlock(nn.Module):
             bias=True,
         )
         self.initial_edge_linear_2 = LinearLayer(
-            in_dim=self.max_radial_n + 1,
+            in_dim=self.max_radial_n,
             out_dim=self.feature_dim,
             bias=True,
         )
@@ -144,7 +144,7 @@ class ThreeBodyInteraction(nn.Module):
         self.cutoff = cutoff
         self.three_body_cutoff = three_body_cutoff
         self.feature_dim = feature_dim
-        self.angle_feature_dim = (max_angular_l + 1) * (max_radial_n + 1)
+        self.angle_feature_dim = max_angular_l * max_radial_n
 
         self.atom_mlp = MLP(
             in_dim=feature_dim,
