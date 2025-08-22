@@ -1,10 +1,12 @@
 import torch
+from loguru import logger
 from torch import nn
 from torch_geometric.data import Data
 
 from .layers.basis import SmoothBesselBasis, SphericalHarmonicAndRadialBasis
 from .layers.common import MLP
 from .layers.embedding import AtomicEmbedding
+from .layers.interaction import MainBlock
 
 
 class M3GNet(nn.Module):
@@ -45,13 +47,18 @@ class M3GNet(nn.Module):
             activation=["swish"],
             bias=True,
         )
-        # self.main_blocks = nn.ModuleList(
-        #     [MainBlock(feature_dim) for _ in range(num_blocks)]
-        # )
-        # self.graph_convolutions = nn.ModuleList(
-        #     [GraphConvolution(feature_dim) for _ in range(num_blocks)]
-        # )
-        # self.mlp = MLP(in_dim=feature_dim, output_dim=feature_dim, activation=")
+        self.main_blocks = nn.ModuleList(
+            [
+                MainBlock(
+                    max_angular_l=max_angular_l,
+                    max_radial_n=max_radial_n,
+                    cutoff=cutoff,
+                    three_body_cutoff=three_body_cutoff,
+                    feature_dim=feature_dim,
+                )
+                for _ in range(num_blocks)
+            ]
+        )
         self.energy_mlp = MLP(
             in_dim=feature_dim,
             output_dim=[feature_dim, feature_dim, 1],
@@ -66,7 +73,9 @@ class M3GNet(nn.Module):
         # the three_body_indices all start from 0. Thus, we need to add the cumsum
         # of the number of bonds in the previous structures to the indices in
         # the three_body_indices.
-        three_body_indices = data.three_body_indices.clone().detach()
+        # Please note, the edge_index attributes of the torch_geometric.data.Data object
+        # will be incremented automatically by the DataLoader, so there is no need to
+        # add the offset to the edge_index here.
         cumsum_bonds = data.total_num_bonds.cumsum(dim=0).detach()
         offsets = torch.cat(
             [
@@ -75,12 +84,12 @@ class M3GNet(nn.Module):
             ]
         )
         # Repeat each offset according to the number of angles in each structure
-        offset = (
+        offsets = (
             torch.repeat_interleave(offsets, data.total_num_angles)
             .unsqueeze(1)
-            .to(three_body_indices.device)
+            .to(data.three_body_indices.device)
         )
-        three_body_indices += offset
+        data.three_body_indices_with_offset = data.three_body_indices + offsets
 
         # Get atomic and edge initial features
         atomic_features = self.atomic_embedding(data.atomic_numbers)  # noqa: F841
@@ -94,7 +103,20 @@ class M3GNet(nn.Module):
         # Get spherical harmonic and radial basis functions
         # These are the representations of the three-body angles,
         # which are used to compute the three-body interactions.
-        shrb = self.shrb(data.norm_ik, data.three_body_cos_angles)  # noqa: F841
+        angle_features = self.shrb(data.norm_ik, data.three_body_cos_angles)  # noqa: F841
 
-        # energy = self.energy_mlp(atomic_features)
-        # return energy
+        for main_block in self.main_blocks:
+            atomic_features, edge_features = main_block(
+                data,
+                atomic_features,
+                edge_features,
+                angle_features,
+                edge_features_0,
+            )
+
+        energy = self.energy_mlp(atomic_features)
+        logger.info(f"data.pos.shape: {data.pos.shape}")
+        logger.info(f"energy.shape: {energy.shape}")
+        logger.info(f"energy: {energy[:10]}")
+
+        return energy
