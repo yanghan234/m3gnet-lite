@@ -1,3 +1,5 @@
+"""Tests for the GraphConverter class."""
+
 import numpy as np
 import pytest
 import torch
@@ -34,9 +36,7 @@ class TestGraphConverter:
         )
 
     def test_simple_unbatched_graph(self, simple_converter):
-        """
-        Tests graph creation for a single, simple structure (no batching).
-        """
+        """Tests graph creation for a single, simple structure (no batching)."""
         # 1. Arrange
         # Points: A=(0,0,0), B=(2,0,0), C=(5,0,0)
         pos = np.array(
