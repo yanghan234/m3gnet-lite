@@ -1,5 +1,4 @@
 import torch
-from loguru import logger
 from torch import nn
 from torch_geometric.data import Data
 
@@ -16,8 +15,8 @@ class M3GNet(nn.Module):
         num_elements: int = 108,
         num_blocks: int = 4,
         feature_dim: int = 128,
-        max_angular_l: int = 4,  # inclusive, i.e. 4 means 0, 1, 2, 3, 4
-        max_radial_n: int = 4,  # inclusive, i.e. 4 means 0, 1, 2, 3, 4
+        max_angular_l: int = 4,  # exclusive, i.e. 4 means 0, 1, 2, 3
+        max_radial_n: int = 4,  # exclusive, i.e. 4 means 0, 1, 2, 3
         cutoff: float = 5.0,
         enable_three_body: bool = True,
         three_body_cutoff: float = 4.0,
@@ -39,10 +38,10 @@ class M3GNet(nn.Module):
 
         # create model components
         self.atomic_embedding = AtomicEmbedding(num_elements, feature_dim)
-        self.rbf = SmoothBesselBasis(cutoff, max_radial_n)  # dim = max_radial_n + 1
+        self.rbf = SmoothBesselBasis(cutoff, max_radial_n)  # dim = max_radial_n
         self.shrb = SphericalHarmonicAndRadialBasis(max_angular_l, max_radial_n, cutoff)
         self.edge_encoding_mlp = MLP(
-            in_dim=max_radial_n + 1,
+            in_dim=max_radial_n,
             output_dim=[feature_dim],
             activation=["swish"],
             bias=True,
@@ -69,6 +68,7 @@ class M3GNet(nn.Module):
         self.to(device)
 
     def forward(self, data: Data, batch: torch.Tensor | None = None) -> torch.Tensor:
+        # 1. Add offset to the three_body_indices to make them global indices
         # The edge_indices were computed for each structure, and thus the indices in
         # the three_body_indices all start from 0. Thus, we need to add the cumsum
         # of the number of bonds in the previous structures to the indices in
@@ -76,11 +76,11 @@ class M3GNet(nn.Module):
         # Please note, the edge_index attributes of the torch_geometric.data.Data object
         # will be incremented automatically by the DataLoader, so there is no need to
         # add the offset to the edge_index here.
-        cumsum_bonds = data.total_num_bonds.cumsum(dim=0).detach()
+        cumsum_edges = data.total_num_edges.cumsum(dim=0).detach()
         offsets = torch.cat(
             [
-                torch.zeros(1, device=cumsum_bonds.device, dtype=cumsum_bonds.dtype),
-                cumsum_bonds[:-1],
+                torch.zeros(1, device=cumsum_edges.device, dtype=cumsum_edges.dtype),
+                cumsum_edges[:-1],
             ]
         )
         # Repeat each offset according to the number of angles in each structure
@@ -91,20 +91,51 @@ class M3GNet(nn.Module):
         )
         data.three_body_indices_with_offset = data.three_body_indices + offsets
 
-        # Get atomic and edge initial features
-        atomic_features = self.atomic_embedding(data.atomic_numbers)  # noqa: F841
+        # 2. Compute the three-body angles, edge_distances, etc.
+        batch = torch.repeat_interleave(
+            torch.arange(data.total_num_edges.shape[0]),
+            data.total_num_edges,
+        )
+        edge_offsets = torch.einsum(
+            "ei, eij->ej", data.edge_offsets, data.cell.reshape(-1, 3, 3)[batch]
+        )
+        edge_vec = (
+            data.pos[data.edge_index[1]] - data.pos[data.edge_index[0]] + edge_offsets
+        )
+        edge_dist = torch.norm(edge_vec, dim=1)
+        data.edge_dist = edge_dist
 
-        # Get initial edge features and encode them to the required feature dimension
-        # so that they can be used in later blocks
-        # This encoding is done with a simple MLP
-        edge_features = edge_features_0 = self.rbf(data.edge_dist)  # noqa: F841
+        edge_ij_indices = data.three_body_indices_with_offset[:, 0]
+        edge_ik_indices = data.three_body_indices_with_offset[:, 1]
+
+        batch = torch.repeat_interleave(
+            torch.arange(data.total_num_atoms.shape[0]),
+            data.total_num_edges,
+        )
+        edge_offsets = torch.einsum(
+            "ei, eij->ej", data.edge_offsets, data.cell.reshape(-1, 3, 3)[batch]
+        )
+
+        vec_ij = edge_vec[edge_ij_indices]
+        vec_ik = edge_vec[edge_ik_indices]
+        norm_ik = edge_dist[edge_ik_indices]
+        data.norm_ik = norm_ik
+
+        cos_angle = torch.sum(vec_ij * vec_ik, dim=1) / (
+            torch.norm(vec_ij, dim=1) * torch.norm(vec_ik, dim=1)
+        )
+        data.three_body_cos_angles = cos_angle
+
+        # 3. Get initial embeddings of atoms and edges.
+        atomic_features = self.atomic_embedding(data.atomic_numbers)
+        edge_features = edge_features_0 = self.rbf(data.edge_dist)
         edge_features = self.edge_encoding_mlp(edge_features)
 
-        # Get spherical harmonic and radial basis functions
-        # These are the representations of the three-body angles,
-        # which are used to compute the three-body interactions.
-        angle_features = self.shrb(data.norm_ik, data.three_body_cos_angles)  # noqa: F841
+        # 4. Get spherical harmonic and radial basis representations
+        # of three-body angles, which are used to compute the three-body interactions.
+        angle_features = self.shrb(data.norm_ik, data.three_body_cos_angles)
 
+        # 5. Message passing blocks with three-body interactions inside each block.
         for main_block in self.main_blocks:
             atomic_features, edge_features = main_block(
                 data,
@@ -114,9 +145,16 @@ class M3GNet(nn.Module):
                 edge_features_0,
             )
 
-        energy = self.energy_mlp(atomic_features)
-        logger.info(f"data.pos.shape: {data.pos.shape}")
-        logger.info(f"energy.shape: {energy.shape}")
-        logger.info(f"energy: {energy[:10]}")
+        # 6. Read out the energy per atom from final atomic features.
+        energy_per_atom = self.energy_mlp(atomic_features).squeeze(-1)
 
-        return energy
+        batch = torch.repeat_interleave(
+            torch.arange(data.total_num_atoms.shape[0], device=energy_per_atom.device),
+            data.total_num_atoms,
+        )
+        return torch.scatter_add(
+            torch.zeros(data.total_num_atoms.shape[0], device=energy_per_atom.device),
+            dim=0,
+            index=batch,
+            src=energy_per_atom,
+        )

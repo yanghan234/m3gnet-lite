@@ -1,3 +1,5 @@
+"""This module implements the interaction layers for M3GNet."""
+
 import torch
 from torch import nn
 from torch_geometric.data import Data
@@ -6,8 +8,8 @@ from .common import MLP, GatedMLP, LinearLayer
 
 
 def envelope_polynomial(x: torch.Tensor, cutoff: float) -> torch.Tensor:
-    """
-    Envelope polynomial for the cutoff function.
+    """Envelope polynomial for the cutoff function.
+
     f(x) = 1 - 6 * (x / cutoff)** 5 + 15 * (x / cutoff)** 4 - 10 * (x / cutoff)** 3
 
     Args:
@@ -21,6 +23,8 @@ def envelope_polynomial(x: torch.Tensor, cutoff: float) -> torch.Tensor:
 
 
 class MainBlock(nn.Module):
+    """The main interaction block for M3GNet."""
+
     def __init__(
         self,
         *,
@@ -30,6 +34,15 @@ class MainBlock(nn.Module):
         three_body_cutoff: float,
         feature_dim: int,
     ):
+        """Initialize the MainBlock class.
+
+        Args:
+            max_angular_l (int): The maximum angular momentum.
+            max_radial_n (int): The maximum number of radial basis functions.
+            cutoff (float): The cutoff radius.
+            three_body_cutoff (float): The three-body cutoff radius.
+            feature_dim (int): The feature dimension.
+        """
         super().__init__()
 
         self.max_angular_l = max_angular_l
@@ -37,7 +50,7 @@ class MainBlock(nn.Module):
         self.cutoff = cutoff
         self.three_body_cutoff = three_body_cutoff
         self.feature_dim = feature_dim
-        self.angle_feature_dim = (max_angular_l + 1) * (max_radial_n + 1)
+        self.angle_feature_dim = max_angular_l * max_radial_n
 
         self.edge_update_gated_mlp = GatedMLP(
             in_dim=3 * self.feature_dim,
@@ -46,7 +59,7 @@ class MainBlock(nn.Module):
             bias=True,
         )
         self.initial_edge_linear_1 = LinearLayer(
-            in_dim=self.max_radial_n + 1,
+            in_dim=self.max_radial_n,
             out_dim=self.feature_dim,
             bias=True,
         )
@@ -58,7 +71,7 @@ class MainBlock(nn.Module):
             bias=True,
         )
         self.initial_edge_linear_2 = LinearLayer(
-            in_dim=self.max_radial_n + 1,
+            in_dim=self.max_radial_n,
             out_dim=self.feature_dim,
             bias=True,
         )
@@ -78,6 +91,18 @@ class MainBlock(nn.Module):
         angle_features: torch.Tensor,
         initial_edge_features: torch.Tensor,
     ) -> torch.Tensor:
+        """Forward pass for the main interaction block.
+
+        Args:
+            data (Data): The data object.
+            atomic_features (torch.Tensor): The atomic features.
+            edge_features (torch.Tensor): The edge features.
+            angle_features (torch.Tensor): The angle features.
+            initial_edge_features (torch.Tensor): The initial edge features.
+
+        Returns:
+            torch.Tensor: The updated atomic and edge features.
+        """
         edge_features = self.three_body_interaction(
             data,
             atomic_features,
@@ -101,7 +126,7 @@ class MainBlock(nn.Module):
             initial_edge_features
         )  # (num_edges, feature_dim)
 
-        edge_features += edge_updates
+        edge_features = edge_features + edge_updates
 
         concat_features = torch.cat(
             [
@@ -118,7 +143,8 @@ class MainBlock(nn.Module):
             initial_edge_features
         )  # (num_edges, feature_dim)
 
-        atomic_features.scatter_add_(
+        atomic_features = torch.scatter_add(
+            atomic_features,
             dim=0,
             index=data.edge_index[0].unsqueeze(-1).expand(-1, self.feature_dim),
             src=atom_updates,
@@ -128,6 +154,8 @@ class MainBlock(nn.Module):
 
 
 class ThreeBodyInteraction(nn.Module):
+    """The three-body interaction layer."""
+
     def __init__(
         self,
         *,
@@ -137,6 +165,15 @@ class ThreeBodyInteraction(nn.Module):
         three_body_cutoff: float,
         feature_dim: int,
     ):
+        """Initialize the ThreeBodyInteraction class.
+
+        Args:
+            max_angular_l (int): The maximum angular momentum.
+            max_radial_n (int): The maximum number of radial basis functions.
+            cutoff (float): The cutoff radius.
+            three_body_cutoff (float): The three-body cutoff radius.
+            feature_dim (int): The feature dimension.
+        """
         super().__init__()
 
         self.max_angular_l = max_angular_l
@@ -144,7 +181,7 @@ class ThreeBodyInteraction(nn.Module):
         self.cutoff = cutoff
         self.three_body_cutoff = three_body_cutoff
         self.feature_dim = feature_dim
-        self.angle_feature_dim = (max_angular_l + 1) * (max_radial_n + 1)
+        self.angle_feature_dim = max_angular_l * max_radial_n
 
         self.atom_mlp = MLP(
             in_dim=feature_dim,
@@ -167,7 +204,8 @@ class ThreeBodyInteraction(nn.Module):
         edge_features: torch.Tensor,
         angle_features: torch.Tensor,
     ) -> torch.Tensor:
-        """
+        """Forward pass for the three-body interaction layer.
+
         Args:
             data (Data): The data object containing the graph structure.
             atomic_features (torch.Tensor): The atomic features.
@@ -176,12 +214,10 @@ class ThreeBodyInteraction(nn.Module):
                 Dimension: (num_edges, feature_dim)
             angle_features (torch.Tensor): The angle features.
                 Dimension: (num_angles, feature_dim)
-            batch (torch.Tensor, optional): The batch tensor. Defaults to None.
 
         Returns:
             torch.Tensor: The three-body interaction.
         """
-
         # apply atomwise MLP
         atomic_filter = self.atom_mlp(atomic_features)
 
@@ -220,7 +256,8 @@ class ThreeBodyInteraction(nn.Module):
         )  # Shape: [num_angles, angle_feature_dim]
 
         # Use scatter_add to accumulate masked features for each edge
-        edge_feature_ij_tilde.scatter_add_(
+        edge_feature_ij_tilde = torch.scatter_add(
+            edge_feature_ij_tilde,
             dim=0,
             index=edge_ij_indices.unsqueeze(-1).expand(-1, self.angle_feature_dim),
             src=masked_angle_features,

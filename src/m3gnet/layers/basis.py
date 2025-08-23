@@ -1,66 +1,65 @@
-import numpy as np
+"""This module implements the basis functions used in M3GNet."""
+
 import torch
-from loguru import logger
-from scipy.optimize import brentq
-from scipy.special import spherical_jn
 from torch import nn
 
 
-def find_spherical_bessel_roots(order, num_roots, search_step=0.1, search_max=100):
+def spherical_jn(
+    angular_l: int,
+    x: torch.Tensor,
+) -> torch.Tensor:
+    """Compute the spherical Bessel function of the first kind for torch.Tensor.
+
+    This function provides a stable implementation for x=0.
     """
-    Finds the first few non-zero roots of a spherical Bessel function by
-    bracketing and solving numerically.
+    x_is_zero = x == 0.0
+    x_no_zero = torch.where(
+        x_is_zero, torch.tensor(1.0, dtype=x.dtype, device=x.device), x
+    )
 
-    This function iterates along the x-axis, finds intervals where the
-    function's sign changes, and then uses a numerical solver to find the
-    precise root in each interval.
+    if angular_l == 0:
+        results = torch.sin(x_no_zero) / x_no_zero
+        results = torch.where(
+            x_is_zero, torch.tensor(1.0, dtype=x.dtype, device=x.device), results
+        )
+    elif angular_l == 1:
+        results = torch.sin(x_no_zero) / x_no_zero**2 - torch.cos(x_no_zero) / x_no_zero
+    elif angular_l == 2:
+        results = (3 / x_no_zero**3 - 1 / x_no_zero) * torch.sin(
+            x_no_zero
+        ) - 3 / x_no_zero**2 * torch.cos(x_no_zero)
+    elif angular_l == 3:
+        results = (15 / x_no_zero**4 - 6 / x_no_zero**2) * torch.sin(x_no_zero) - (
+            15 / x_no_zero**3 - 1 / x_no_zero
+        ) * torch.cos(x_no_zero)
+    elif angular_l == 4:
+        results = (105 / x_no_zero**5 - 45 / x_no_zero**3 + 1 / x_no_zero) * torch.sin(
+            x_no_zero
+        ) - (105 / x_no_zero**4 - 10 / x_no_zero**2) * torch.cos(x_no_zero)
+    elif angular_l == 5:
+        results = (
+            945 / x_no_zero**6 - 420 / x_no_zero**4 + 15 / x_no_zero**2
+        ) * torch.sin(x_no_zero) - (
+            945 / x_no_zero**5 - 105 / x_no_zero**3 + 1 / x_no_zero
+        ) * torch.cos(x_no_zero)
+    else:
+        raise ValueError("Only angular_l = 0, 1, 2, 3, 4, 5 are supported.")
 
-    Args:
-        order (int): The order 'n' of the spherical Bessel function.
-        num_roots (int): The number of non-zero roots to find.
-        search_step (float): The step size for searching for root intervals.
-        search_max (float): The maximum x-value to search up to.
-
-    Returns:
-        numpy.ndarray: An array containing the first 'num_roots' roots.
-    """
-    roots = []
-    # Start searching slightly away from zero to avoid the trivial root at x=0
-    x_current = 0.01
-    f_current = spherical_jn(order, x_current)
-
-    while len(roots) < num_roots and x_current < search_max:
-        x_next = x_current + search_step
-        f_next = spherical_jn(order, x_next)
-
-        # Check for a sign change, which indicates a root is bracketed
-        if np.sign(f_current) != np.sign(f_next):
-            try:
-                # Use Brent's method to find the root within the interval
-                root = brentq(lambda x: spherical_jn(order, x), x_current, x_next)
-                roots.append(root)
-            except ValueError:
-                # This can happen if the interval is not valid, though unlikely here
-                pass
-
-        x_current = x_next
-        f_current = f_next
-
-    if len(roots) < num_roots:
-        logger.warning(
-            f"Warning: Only found {len(roots)} roots out of {num_roots} requested "
-            f"up to x={search_max}."
+    # For l > 0, the value at x=0 is always 0
+    if angular_l > 0:
+        results = torch.where(
+            x_is_zero, torch.tensor(0.0, dtype=x.dtype, device=x.device), results
         )
 
-    return np.array(roots)
+    return results
 
 
 def spherical_bessel_zeros(
     angular_l: int = 0,
     radial_n: int = 0,
 ) -> torch.Tensor:
-    """
-    Query the zero points of the spherical Bessel function of the first kind.
+    """Query the zero points of the spherical Bessel function of the first kind.
+
     The zeros are precomputed for angular_l = 0, 1, 2, 3, 4, 5 and radial_n < 20.
     Beyond this range, the zeros need to be computed on the fly.
 
@@ -71,13 +70,11 @@ def spherical_bessel_zeros(
     if angular_l < 0 or radial_n < 0:
         raise ValueError("angular_l and radial_n must be greater than or equal to 0.")
 
-    if angular_l > 5 or radial_n > 20:
-        logger.warning(
+    if angular_l > 4 or radial_n > 4:
+        raise ValueError(
             f"angular_l = {angular_l} and radial_n = {radial_n} is "
             "beyond the precomputed range. "
-            "Computing the zeros on the fly, but this can be very slow."
         )
-        return find_spherical_bessel_roots(angular_l, radial_n)[-1]
 
     precomputed_zeros = torch.tensor(
         [
@@ -230,11 +227,12 @@ def real_spherical_harmonics_m0(
     angular_l: int = 0,
 ) -> torch.Tensor:
     r"""Compute the m = 0 compoent of the real spherical harmonics.
-    $$Y_{00} = \frac{1}{\sqrt{4\pi}}$$
-    $$Y_{10} = \sqrt{\frac{3}{4\pi}}\cos\theta$$
-    $$Y_{20} = \sqrt{\frac{5}{16\pi}}(3\cos^2\theta - 1)$$
-    $$Y_{30} = \sqrt{\frac{7}{16\pi}}(5\cos^3\theta - 3\cos\theta)$$
-    $$Y_{40} = \sqrt{\frac{9}{256\pi}}(35\cos^4\theta - 30\cos^2\theta + 3)$$
+
+    $Y_{00} = \frac{1}{\sqrt{4\pi}}$
+    $Y_{10} = \sqrt{\frac{3}{4\pi}}\cos\theta$
+    $Y_{20} = \sqrt{\frac{5}{16\pi}}(3\cos^2\theta - 1)$
+    $Y_{30} = \sqrt{\frac{7}{16\pi}}(5\cos^3\theta - 3\cos\theta)$
+    $Y_{40} = \sqrt{\frac{9}{256\pi}}(35\cos^4\theta - 30\cos^2\theta + 3)$
     Refer: https://en.wikipedia.org/wiki/Table_of_spherical_harmonics for more details.
 
     Args:
@@ -275,10 +273,10 @@ def real_spherical_harmonics_m0(
 
 
 class SphericalHarmonicAndRadialBasis(nn.Module):
-    """
-    Represents the radii and angles of three-body interactions using a combined radial
-    and spherical harmonic basis, following the DimeNet formalism
-    (see https://arxiv.org/abs/2003.03123, Eq. 6).
+    """Represents the radii and angles of three-body interactions.
+
+    This is done by using a combined radial and spherical harmonic basis,
+    following the DimeNet formalism (see https://arxiv.org/abs/2003.03123, Eq. 6).
 
     Note:
         - The original DimeNet paper applies an envelope polynomial to both the
@@ -295,15 +293,25 @@ class SphericalHarmonicAndRadialBasis(nn.Module):
     """
 
     def __init__(
-        self, max_angular_l: int = 4, max_radial_n: int = 4, cutoff: float = 5.0
+        self,
+        max_angular_l: int = 4,
+        max_radial_n: int = 4,
+        cutoff: float = 5.0,
     ):
+        """Initialize the SphericalHarmonicAndRadialBasis class.
+
+        Args:
+            max_angular_l (int): Maximum angular momentum quantum number (l).
+            max_radial_n (int): Maximum radial quantum number (n).
+            cutoff (float): Cutoff radius.
+        """
         super().__init__()
 
-        if max_angular_l < 0 or max_angular_l > 4:
-            raise ValueError("max_angular_l must be between 0 and 4.")
+        if max_angular_l < 0 or max_angular_l > 5:
+            raise ValueError("max_angular_l must be between 0 and 5.")
 
-        if max_radial_n < 0 or max_radial_n > 4:
-            raise ValueError("max_radial_n must be between 0 and 4.")
+        if max_radial_n < 0 or max_radial_n > 5:
+            raise ValueError("max_radial_n must be between 0 and 5.")
 
         if cutoff <= 0:
             raise ValueError("cutoff must be greater than 0.")
@@ -313,8 +321,7 @@ class SphericalHarmonicAndRadialBasis(nn.Module):
         self.cutoff = cutoff
 
     def forward(self, r: torch.Tensor, theta: torch.Tensor) -> torch.Tensor:
-        """
-        Compute the spherical harmonic and radial basis functions.
+        """Compute the spherical harmonic and radial basis functions.
 
         Args:
             r (torch.Tensor): The radial distance. Shape: (num_edges,)
@@ -322,19 +329,18 @@ class SphericalHarmonicAndRadialBasis(nn.Module):
 
         Returns:
             torch.Tensor: The spherical harmonic and radial basis functions.
-            Return shape: (num_edges, (max_radial_n+1) * (max_angular_l+1))
+            Return shape: (num_edges, max_radial_n * max_angular_l)
         """
         r_scaled = r / self.cutoff
 
-        shrb = torch.zeros(self.max_radial_n + 1, self.max_angular_l + 1, r.shape[0])
-        for angluar_l in range(self.max_angular_l + 1):
-            angular_ = real_spherical_harmonics_m0(
-                torch.cos(theta), angluar_l
-            ).unsqueeze(-1)
-            for radial_n in range(self.max_radial_n + 1):
+        shrb = torch.zeros(self.max_radial_n, self.max_angular_l, r.shape[0])
+        for angluar_l in range(self.max_angular_l):
+            angular_ = real_spherical_harmonics_m0(torch.cos(theta), angluar_l)
+            for radial_n in range(self.max_radial_n):
                 z_ln = spherical_bessel_zeros(angluar_l, radial_n)
                 prefactor = torch.tensor(
-                    np.sqrt(2.0 / self.cutoff**3) / spherical_jn(angluar_l + 1, z_ln)
+                    torch.sqrt(torch.tensor(2.0 / self.cutoff**3))
+                    / spherical_jn(angluar_l + 1, z_ln)
                 )
                 spherical_jn_results = (
                     prefactor
@@ -347,17 +353,26 @@ class SphericalHarmonicAndRadialBasis(nn.Module):
         # move the last index to the first index but keep the other
         # two indices in the same order
         return shrb.permute(2, 0, 1).reshape(
-            -1, (self.max_radial_n + 1) * (self.max_angular_l + 1)
+            -1, (self.max_radial_n) * (self.max_angular_l)
         )
 
 
 class SmoothBesselBasis(nn.Module):
+    """The smooth bessel basis function."""
+
     def __init__(
         self,
         cutoff: float,
         max_radial_n: int = 3,
         device: str | torch.device = "cpu",
     ):
+        """Initialize the SmoothBesselBasis class.
+
+        Args:
+            cutoff (float): The cutoff radius.
+            max_radial_n (int): The maximum number of radial basis functions.
+            device (str | torch.device): The device to use.
+        """
         super().__init__()
 
         self.cutoff = cutoff
@@ -365,21 +380,21 @@ class SmoothBesselBasis(nn.Module):
         self.device = device
 
         # generate temporary parameters
-        en = torch.zeros(max_radial_n + 1, dtype=torch.float32, device=device)
-        for n in range(max_radial_n + 1):
+        en = torch.zeros(max_radial_n, dtype=torch.float32, device=device)
+        for n in range(max_radial_n):
             en[n] = n**2 * (n + 2) ** 2 / (4 * (n + 1) ** 4 + 1)
         self.register_buffer("en", en)
 
-        dn = torch.arange(max_radial_n + 1, dtype=torch.float32, device=device)
-        for n in range(max_radial_n + 1):
+        dn = torch.arange(max_radial_n, dtype=torch.float32, device=device)
+        for n in range(max_radial_n):
             dn[n] = 1.0 - en[n] / dn[n - 1] if n > 0 else 1.0
         self.register_buffer("dn", dn)
 
         n_plus_1_factor = [
-            (n + 1) * np.pi / self.cutoff for n in range(max_radial_n + 1)
+            (n + 1) * torch.pi / self.cutoff for n in range(max_radial_n)
         ]
         n_plus_2_factor = [
-            (n + 2) * np.pi / self.cutoff for n in range(max_radial_n + 1)
+            (n + 2) * torch.pi / self.cutoff for n in range(max_radial_n)
         ]
         self.register_buffer(
             "n_plus_1_factor",
@@ -392,13 +407,13 @@ class SmoothBesselBasis(nn.Module):
 
         fn_factor = [
             (-1) ** n
-            * np.sqrt(2)
-            * np.pi
+            * torch.sqrt(torch.tensor(2))
+            * torch.pi
             / self.cutoff**1.5
             * (n + 1)
             * (n + 2)
-            / np.sqrt((n + 1) ** 2 + (n + 2) ** 2)
-            for n in range(max_radial_n + 1)
+            / torch.sqrt(torch.tensor((n + 1) ** 2 + (n + 2) ** 2))
+            for n in range(max_radial_n)
         ]
         self.register_buffer(
             "fn_factor", torch.tensor(fn_factor, dtype=torch.float32, device=device)
@@ -411,8 +426,7 @@ class SmoothBesselBasis(nn.Module):
         self,
         x: torch.Tensor,
     ) -> torch.Tensor:
-        """
-        Evaluate the smooth bessel basis functions at a give coordinate x.
+        """Evaluate the smooth bessel basis functions at a give coordinate x.
 
         Args:
             x: (num_edges,)
@@ -420,12 +434,9 @@ class SmoothBesselBasis(nn.Module):
         Returns:
             (num_edges, max_radial_n)
         """
+        bessel_basis = torch.zeros(x.shape[0], self.max_radial_n, device=self.device)
 
-        bessel_basis = torch.zeros(
-            x.shape[0], self.max_radial_n + 1, device=self.device
-        )
-
-        for n in range(self.max_radial_n + 1):
+        for n in range(self.max_radial_n):
             r_with_plus1_factor = x * self.n_plus_1_factor[n]
             r_with_plus2_factor = x * self.n_plus_2_factor[n]
 
@@ -433,8 +444,8 @@ class SmoothBesselBasis(nn.Module):
             # but I decide to use the implementation in numpy/torch,
             # because it is more stable especially when x is close to 0
             fn = self.fn_factor[n] * (
-                torch.sinc(r_with_plus1_factor / np.pi)
-                + torch.sinc(r_with_plus2_factor / np.pi)
+                torch.sinc(r_with_plus1_factor / torch.pi)
+                + torch.sinc(r_with_plus2_factor / torch.pi)
             )
             if n == 0:
                 bessel_basis[:, n] = fn

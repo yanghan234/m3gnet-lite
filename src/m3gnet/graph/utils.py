@@ -1,3 +1,5 @@
+"""Utility functions for graph operations."""
+
 from itertools import permutations
 
 import numpy as np
@@ -13,8 +15,7 @@ def compute_fixed_radius_graph(
     cutoff: float = 5.0,
     numerical_tol: float = 1e-8,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Compute a fixed radius graph.
+    """Compute a fixed radius graph.
 
     Args:
         pos (torch.Tensor): The positions of the atoms.
@@ -27,7 +28,6 @@ def compute_fixed_radius_graph(
         tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
             The edge index, distances, and offsets.
     """
-
     if pbc and cell is None:
         raise ValueError("Cell parameters are required when pbc is True.")
 
@@ -97,8 +97,7 @@ def compute_threebody_indices(
     *,
     three_body_cutoff: float = 4.0,
 ) -> tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Given the two-body graph, compute three-body indices within the cutoff.
+    """Given the two-body graph, compute three-body indices within the cutoff.
 
     Args:
         pos (np.ndarray): Atom positions, shape (num_atoms, 3).
@@ -114,7 +113,6 @@ def compute_threebody_indices(
         - num_angles_on_central_atom (np.ndarray): Shape (num_edges,).
         - three_body_indices (np.ndarray): Shape (num_angles, 2).
     """
-
     # 0. filter the bonds that are within the two-body cutoff radius
     #    and establish the mapping from the global bond index to the filtered bond index
     #    and vice versa

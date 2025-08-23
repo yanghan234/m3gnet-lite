@@ -1,3 +1,5 @@
+"""Tests for the GraphConverter class."""
+
 import numpy as np
 import pytest
 import torch
@@ -34,9 +36,7 @@ class TestGraphConverter:
         )
 
     def test_simple_unbatched_graph(self, simple_converter):
-        """
-        Tests graph creation for a single, simple structure (no batching).
-        """
+        """Tests graph creation for a single, simple structure (no batching)."""
         # 1. Arrange
         # Points: A=(0,0,0), B=(2,0,0), C=(5,0,0)
         pos = np.array(
@@ -65,7 +65,7 @@ class TestGraphConverter:
         assert np.allclose(data.edge_dist, expected_distances, atol=1e-6)
 
         # Check that positions are preserved
-        assert np.allclose(data.pos, pos)
+        assert np.allclose(data.pos.detach().numpy(), pos)
 
     def test_no_edges_with_small_cutoff(self):
         """Test that no edges are created when cutoff is too small."""
