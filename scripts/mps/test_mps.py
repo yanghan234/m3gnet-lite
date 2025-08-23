@@ -6,8 +6,7 @@ from loguru import logger
 
 
 def benchmark_device(device_name, tensor_size, iterations):
-    """
-    Runs a matrix multiplication benchmark on a specified device.
+    """Runs a matrix multiplication benchmark on a specified device.
 
     Args:
         device_name (str): The device to run on ('cpu' or 'mps').
