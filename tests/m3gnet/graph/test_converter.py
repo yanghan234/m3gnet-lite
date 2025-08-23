@@ -65,7 +65,7 @@ class TestGraphConverter:
         assert np.allclose(data.edge_dist, expected_distances, atol=1e-6)
 
         # Check that positions are preserved
-        assert np.allclose(data.pos, pos)
+        assert np.allclose(data.pos.detach().numpy(), pos)
 
     def test_no_edges_with_small_cutoff(self):
         """Test that no edges are created when cutoff is too small."""

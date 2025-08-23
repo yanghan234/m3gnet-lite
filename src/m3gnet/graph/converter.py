@@ -53,16 +53,20 @@ class GraphConverter:
             pos=pos, cell=cell, pbc=self.pbc, cutoff=self.cutoff
         )
 
-        data = Data(
-            total_num_atoms=torch.tensor(pos.shape[0], dtype=torch.long),
-            total_num_edges=torch.tensor(edge_index.shape[1], dtype=torch.long),
-            atomic_numbers=torch.tensor(atomic_numbers, dtype=torch.long),
-            pos=torch.tensor(pos, dtype=torch.float32, requires_grad=True),
-            cell=torch.tensor(cell, dtype=torch.float32),
-            edge_index=torch.tensor(edge_index, dtype=torch.long),
-            edge_dist=torch.tensor(edge_dist, dtype=torch.float32),
-            edge_offsets=torch.tensor(edge_offsets, dtype=torch.float32),
-        )
+        data_dict = {
+            "total_num_atoms": torch.tensor(pos.shape[0], dtype=torch.long),
+            "total_num_edges": torch.tensor(edge_index.shape[1], dtype=torch.long),
+            "pos": torch.tensor(pos, dtype=torch.float32, requires_grad=True),
+            "edge_index": torch.tensor(edge_index, dtype=torch.long),
+            "edge_dist": torch.tensor(edge_dist, dtype=torch.float32),
+            "edge_offsets": torch.tensor(edge_offsets, dtype=torch.float32),
+        }
+        if atomic_numbers is not None:
+            data_dict["atomic_numbers"] = torch.tensor(atomic_numbers, dtype=torch.long)
+        if cell is not None:
+            data_dict["cell"] = torch.tensor(cell, dtype=torch.float32)
+
+        data = Data(**data_dict)
 
         # check if all edge_dist are non-zero
         if sum(np.where(edge_dist < 1e-6, 1, 0)) > 0:
