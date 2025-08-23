@@ -101,7 +101,7 @@ class MainBlock(nn.Module):
             initial_edge_features
         )  # (num_edges, feature_dim)
 
-        edge_features += edge_updates
+        edge_features = edge_features + edge_updates
 
         concat_features = torch.cat(
             [
@@ -118,7 +118,8 @@ class MainBlock(nn.Module):
             initial_edge_features
         )  # (num_edges, feature_dim)
 
-        atomic_features.scatter_add_(
+        atomic_features = torch.scatter_add(
+            atomic_features,
             dim=0,
             index=data.edge_index[0].unsqueeze(-1).expand(-1, self.feature_dim),
             src=atom_updates,
@@ -220,7 +221,8 @@ class ThreeBodyInteraction(nn.Module):
         )  # Shape: [num_angles, angle_feature_dim]
 
         # Use scatter_add to accumulate masked features for each edge
-        edge_feature_ij_tilde.scatter_add_(
+        edge_feature_ij_tilde = torch.scatter_add(
+            edge_feature_ij_tilde,
             dim=0,
             index=edge_ij_indices.unsqueeze(-1).expand(-1, self.angle_feature_dim),
             src=masked_angle_features,
