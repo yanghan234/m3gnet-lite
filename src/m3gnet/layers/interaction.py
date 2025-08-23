@@ -1,3 +1,5 @@
+"""This module implements the interaction layers for M3GNet."""
+
 import torch
 from torch import nn
 from torch_geometric.data import Data
@@ -6,8 +8,8 @@ from .common import MLP, GatedMLP, LinearLayer
 
 
 def envelope_polynomial(x: torch.Tensor, cutoff: float) -> torch.Tensor:
-    """
-    Envelope polynomial for the cutoff function.
+    """Envelope polynomial for the cutoff function.
+
     f(x) = 1 - 6 * (x / cutoff)** 5 + 15 * (x / cutoff)** 4 - 10 * (x / cutoff)** 3
 
     Args:
@@ -21,6 +23,8 @@ def envelope_polynomial(x: torch.Tensor, cutoff: float) -> torch.Tensor:
 
 
 class MainBlock(nn.Module):
+    """The main interaction block for M3GNet."""
+
     def __init__(
         self,
         *,
@@ -30,6 +34,15 @@ class MainBlock(nn.Module):
         three_body_cutoff: float,
         feature_dim: int,
     ):
+        """Initialize the MainBlock class.
+
+        Args:
+            max_angular_l (int): The maximum angular momentum.
+            max_radial_n (int): The maximum number of radial basis functions.
+            cutoff (float): The cutoff radius.
+            three_body_cutoff (float): The three-body cutoff radius.
+            feature_dim (int): The feature dimension.
+        """
         super().__init__()
 
         self.max_angular_l = max_angular_l
@@ -78,6 +91,18 @@ class MainBlock(nn.Module):
         angle_features: torch.Tensor,
         initial_edge_features: torch.Tensor,
     ) -> torch.Tensor:
+        """Forward pass for the main interaction block.
+
+        Args:
+            data (Data): The data object.
+            atomic_features (torch.Tensor): The atomic features.
+            edge_features (torch.Tensor): The edge features.
+            angle_features (torch.Tensor): The angle features.
+            initial_edge_features (torch.Tensor): The initial edge features.
+
+        Returns:
+            torch.Tensor: The updated atomic and edge features.
+        """
         edge_features = self.three_body_interaction(
             data,
             atomic_features,
@@ -129,6 +154,8 @@ class MainBlock(nn.Module):
 
 
 class ThreeBodyInteraction(nn.Module):
+    """The three-body interaction layer."""
+
     def __init__(
         self,
         *,
@@ -138,6 +165,15 @@ class ThreeBodyInteraction(nn.Module):
         three_body_cutoff: float,
         feature_dim: int,
     ):
+        """Initialize the ThreeBodyInteraction class.
+
+        Args:
+            max_angular_l (int): The maximum angular momentum.
+            max_radial_n (int): The maximum number of radial basis functions.
+            cutoff (float): The cutoff radius.
+            three_body_cutoff (float): The three-body cutoff radius.
+            feature_dim (int): The feature dimension.
+        """
         super().__init__()
 
         self.max_angular_l = max_angular_l
@@ -168,7 +204,8 @@ class ThreeBodyInteraction(nn.Module):
         edge_features: torch.Tensor,
         angle_features: torch.Tensor,
     ) -> torch.Tensor:
-        """
+        """Forward pass for the three-body interaction layer.
+
         Args:
             data (Data): The data object containing the graph structure.
             atomic_features (torch.Tensor): The atomic features.
@@ -177,12 +214,10 @@ class ThreeBodyInteraction(nn.Module):
                 Dimension: (num_edges, feature_dim)
             angle_features (torch.Tensor): The angle features.
                 Dimension: (num_angles, feature_dim)
-            batch (torch.Tensor, optional): The batch tensor. Defaults to None.
 
         Returns:
             torch.Tensor: The three-body interaction.
         """
-
         # apply atomwise MLP
         atomic_filter = self.atom_mlp(atomic_features)
 
