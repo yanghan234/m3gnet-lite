@@ -1,3 +1,5 @@
+"""This module provides a class to convert atomic structures to graphs."""
+
 import numpy as np
 import torch
 from ase.atoms import Atoms
@@ -8,8 +10,7 @@ from .utils import compute_fixed_radius_graph, compute_threebody_indices
 
 
 class GraphConverter:
-    """
-    Convert a set of atomic coordinates and cell parameters into a PyG graph.
+    """Convert a set of atomic coordinates and cell parameters into a PyG graph.
 
     Args:
         cutoff: Cutoff radius for the graph construction. Default is 5.0.
@@ -24,6 +25,15 @@ class GraphConverter:
         pbc: bool = True,
         three_body_cutoff: float | None = 4.0,
     ):
+        """Initialize the GraphConverter.
+
+        Args:
+            cutoff (float, optional): Cutoff radius. Defaults to 5.0.
+            pbc (bool, optional): Whether to use periodic boundary conditions.
+                Defaults to True.
+            three_body_cutoff (float | None, optional): Three-body cutoff.
+                Defaults to 4.0.
+        """
         self.cutoff = cutoff
         self.pbc = pbc
         self.three_body_cutoff = three_body_cutoff
@@ -35,9 +45,7 @@ class GraphConverter:
         cell: np.ndarray | None = None,
         atomic_numbers: np.ndarray | None = None,
     ) -> Data:
-        """
-        Convert a set of atomic coordinates and cell parameters into a PyG graph.
-        """
+        """Convert a set of atomic coordinates and cell parameters into a PyG graph."""
         if self.pbc and cell is None:
             raise ValueError("Cell parameters are required when pbc is True.")
 
@@ -86,9 +94,7 @@ class GraphConverter:
         return data
 
     def convert_ase_atoms(self, atoms: Atoms, **kwargs) -> Data:
-        """
-        Convert an ASE Atoms object into a PyG graph.
-        """
+        """Convert an ASE Atoms object into a PyG graph."""
         return self.convert(
             pos=atoms.positions,
             cell=atoms.cell,
@@ -97,9 +103,7 @@ class GraphConverter:
         )
 
     def convert_pymatgen_structure(self, structure: Structure, **kwargs) -> Data:
-        """
-        Convert a PyMatGen Structure object into a PyG graph.
-        """
+        """Convert a PyMatGen Structure object into a PyG graph."""
         return self.convert(
             pos=structure.cart_coords,
             cell=structure.lattice.matrix,
