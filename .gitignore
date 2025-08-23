@@ -150,3 +150,6 @@ Desktop.ini
 
 # Template-specific files (should not be committed to project repos)
 template_scripts/
+
+# Gemini CLI files
+.gemini/
