@@ -25,6 +25,8 @@ dependencies = [
     "torchvision>=0.23.0",
     "torch-geometric>=2.6.1",
     "tqdm>=4.67.1",
+    "lmdb>=1.7.3",
+    "ijson>=3.4.0",
 ]
 
 [dependency-groups]
