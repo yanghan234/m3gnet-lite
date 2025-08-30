@@ -11,6 +11,7 @@ from typing import Any
 import ijson
 import lmdb
 import numpy as np
+import torch
 from ase import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator
 from loguru import logger
@@ -752,6 +753,9 @@ class MPTrjDataset(Dataset):
                         f"Labels for sample {idx} not found in shard {shard_idx}"
                     )
                 labels = pickle.loads(label_bytes)  # noqa: S301
+                data.energy = torch.tensor([labels["energy"]], dtype=torch.float32)
+                data.forces = torch.tensor(labels["forces"], dtype=torch.float32)
+                data.stress = torch.tensor([labels["stress"]], dtype=torch.float32)
                 graph_data = data
             else:
                 graph_data = data["graph"]
@@ -760,7 +764,8 @@ class MPTrjDataset(Dataset):
             if self.transform:
                 graph_data = self.transform(graph_data)
 
-            return {"graph": graph_data, "labels": labels}
+            # return {"graph": graph_data, "labels": labels}
+            return graph_data
 
         except Exception as e:
             logger.error(f"Error loading sample {idx}: {e}")
