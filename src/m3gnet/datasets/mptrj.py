@@ -420,8 +420,8 @@ class MPTrjDataset(Dataset):
 
                     energy, forces, stress = (
                         values["uncorrected_total_energy"],
-                        values["force"],
-                        values["stress"],
+                        np.array(values["force"]),
+                        np.array(values["stress"]) * (-0.1),  # kbar to GPa
                     )
                     atoms.calc = SinglePointCalculator(
                         atoms=atoms, energy=energy, forces=forces, stress=stress
