@@ -50,6 +50,7 @@ class MPF2021Dataset(Dataset):
         else:
             self.db_shards = []
             self.num_samples = 0
+        self._db_connections = {}
 
         super().__init__(root, transform, pre_transform, pre_filter)
 
@@ -79,7 +80,7 @@ class MPF2021Dataset(Dataset):
     @property
     def processed_file_names(self):
         """Get the names of the processed files."""
-        return [os.path.join("shard_0", "data.mdb")]
+        return [os.path.join(f"shard_{i}", "data.mdb") for i in range(8)]
 
     def download(self):
         """Download the raw data files."""
@@ -107,7 +108,21 @@ class MPF2021Dataset(Dataset):
                 f"but got {len(raw_data)}."
             )
 
-        number_of_structures = sum([len(v["structure"]) for v in raw_data.values()])
+        flatten_raw_data = []
+        for mp_id, values in raw_data.items():
+            for idx, structure in enumerate(values["structure"]):
+                flatten_raw_data.append(
+                    {
+                        "mp_id": mp_id,
+                        "snapshot_id": values["id"][idx],
+                        "structure": structure,
+                        "energy": values["energy"][idx],
+                        "force": values["force"][idx],
+                        "stress": values["stress"][idx],
+                    }
+                )
+
+        number_of_structures = len(flatten_raw_data)
         if number_of_structures != self.expected_number_of_structures:
             raise ValueError(
                 f"Expected {self.expected_number_of_structures} structures, "
@@ -115,97 +130,107 @@ class MPF2021Dataset(Dataset):
             )
 
         # sharding information
-        shard_idx = 0
+        shard_info = self.db_shards if self.db_shards else []
+        start_idx = self.db_shards[-1]["cumulative_entries"] if self.db_shards else 0
+        shard_idx = self.db_shards[-1]["shard_idx"] + 1 if self.db_shards else 0
         current_db_path = os.path.join(self.processed_dir, f"shard_{shard_idx}")
         env = lmdb.open(current_db_path, map_size=self.MAX_SHARD_SIZE_BYTES)
         txn = env.begin(write=True)
-        shard_info = []
         current_shard_count = 0
+        first_shard_path = os.path.join(self.processed_dir, "shard_0")
 
         # chunk
         chunk = {}
 
-        global_idx = 0
-        for mp_id, values in tqdm(
-            raw_data.items(), total=self.expected_number_of_trajectories
+        for global_idx, values in enumerate(
+            tqdm(flatten_raw_data, total=number_of_structures)
         ):
-            for idx, structure in enumerate(values["structure"]):
-                snapshot_id = values["id"][idx]
-                lattice = np.array(structure._lattice._matrix)  # noqa: SLF001
-                chemical_symbols = [
-                    site._species.chemical_system  # noqa: SLF001
-                    for site in structure._sites  # noqa: SLF001
-                ]
-                cart_coords = np.array([site._coords for site in structure._sites])  # noqa: SLF001
-                atomic_numbers = np.array(
-                    [ase_atomic_numbers[symbol] for symbol in chemical_symbols]
+            if global_idx < start_idx:
+                continue
+            snapshot_id = values["snapshot_id"]
+            structure = values["structure"]
+            lattice = np.array(structure._lattice._matrix)  # noqa: SLF001
+            chemical_symbols = [
+                site._species.chemical_system  # noqa: SLF001
+                for site in structure._sites  # noqa: SLF001
+            ]
+            cart_coords = np.array([site._coords for site in structure._sites])  # noqa: SLF001
+            atomic_numbers = np.array(
+                [ase_atomic_numbers[symbol] for symbol in chemical_symbols]
+            )
+
+            # convert to graph
+            data = self.graph_converter.convert(
+                pos=cart_coords, cell=lattice, atomic_numbers=atomic_numbers
+            )
+            data.mp_id = values["mp_id"]
+            data.snapshot_id = snapshot_id
+            data.energy = torch.tensor(values["energy"], dtype=torch.float32)
+            data.forces = torch.tensor(values["force"], dtype=torch.float32)
+            data.stress = torch.tensor(
+                np.array(values["stress"]) * (-0.1), dtype=torch.float32
+            )
+
+            chunk[f"{global_idx}".encode()] = pickle.dumps(data)
+
+            if len(chunk) < chunk_size:
+                continue
+
+            # try to put the chunk into the current shard
+            try:
+                for key, data in chunk.items():
+                    txn.put(key, data)
+                txn.commit()
+                txn = env.begin(write=True)
+                current_shard_count += len(chunk)
+                chunk = {}
+            except lmdb.MapFullError:
+                # abort the current transaction
+                txn.abort()
+                env.close()
+
+                # update shard metadata
+                shard_info.append(
+                    {
+                        "shard_idx": shard_idx,
+                        "shard_name": f"shard_{shard_idx}",
+                        "cumulative_entries": shard_info[-1]["cumulative_entries"]
+                        + current_shard_count
+                        if shard_info
+                        else current_shard_count,
+                        "count": current_shard_count,
+                    }
                 )
 
-                # convert to graph
-                data = self.graph_converter.convert(
-                    pos=cart_coords, cell=lattice, atomic_numbers=atomic_numbers
-                )
-                data.mp_id = mp_id
-                data.snapshot_id = snapshot_id
-                data.energy = torch.tensor(values["energy"][idx])
-                data.forces = torch.tensor(values["force"][idx])
-                data.stress = torch.tensor(np.array(values["stress"][idx]) * (-0.1))
+                metadata_str = json.dumps(shard_info, indent=2)
 
-                chunk[f"{global_idx}".encode()] = pickle.dumps(data)
-                global_idx += 1
+                with (
+                    lmdb.open(
+                        first_shard_path, map_size=self.MAX_SHARD_SIZE_BYTES
+                    ) as env0,
+                    env0.begin(write=True) as txn0,
+                ):
+                    txn0.put(b"__metadata__", metadata_str.encode())
+                # create new shard
+                shard_idx += 1
+                current_db_path = os.path.join(self.processed_dir, f"shard_{shard_idx}")
+                env = lmdb.open(current_db_path, map_size=self.MAX_SHARD_SIZE_BYTES)
+                txn = env.begin(write=True)
+                current_shard_count = 0
 
-                if len(chunk) >= chunk_size:
-                    # try to put the chunk into the current shard
-                    try:
-                        for key, data in chunk.items():
-                            txn.put(key, data)
-                        txn.commit()
-                        txn = env.begin(write=True)
-                        current_shard_count += len(chunk)
-                        chunk = {}
-                    except lmdb.MapFullError:
-                        # abort the current transaction
-                        txn.abort()
-                        env.close()
-
-                        # update shard metadata
-                        shard_info.append(
-                            {
-                                "shard_name": f"shard_{shard_idx}",
-                                "cumulative_entries": shard_info[-1][
-                                    "cumulative_entries"
-                                ]
-                                + current_shard_count
-                                if shard_info
-                                else current_shard_count,
-                                "count": current_shard_count,
-                            }
-                        )
-
-                        # create new shard
-                        shard_idx += 1
-                        current_db_path = os.path.join(
-                            self.processed_dir, f"shard_{shard_idx}"
-                        )
-                        env = lmdb.open(
-                            current_db_path, map_size=self.MAX_SHARD_SIZE_BYTES
-                        )
-                        txn = env.begin(write=True)
-                        current_shard_count = 0
-
-                        # retry putting the chunk
-                        for key, data in chunk.items():
-                            txn.put(key, data)
-                        txn.commit()
-                        txn = env.begin(write=True)
-                        current_shard_count += len(chunk)
-                        chunk = {}
+                # retry putting the chunk
+                for key, data in chunk.items():
+                    txn.put(key, data)
+                txn.commit()
+                txn = env.begin(write=True)
+                current_shard_count += len(chunk)
+                chunk = {}
 
         # Put any remaining data in the chunk
         for key, data in chunk.items():
             txn.put(key, data)
-        chunk = {}
         current_shard_count += len(chunk)
+        chunk = {}
 
         # Final commit for the last shard
         txn.commit()
@@ -213,6 +238,7 @@ class MPF2021Dataset(Dataset):
 
         shard_info.append(
             {
+                "shard_idx": shard_idx,
                 "shard_name": f"shard_{shard_idx}",
                 "cumulative_entries": shard_info[-1]["cumulative_entries"]
                 + current_shard_count
@@ -233,11 +259,43 @@ class MPF2021Dataset(Dataset):
 
     def get(self, idx: int):
         """Get the data object at index `idx`. TODO: support sharding."""
-        with self.db.begin() as txn:
-            serialized_data = txn.get(key=str(idx).encode("ascii"))
-            if serialized_data is None:
-                raise IndexError(f"Index {idx} not found in the dataset.")
-            return pickle.loads(serialized_data)  # noqa: S301
+        if idx < 0 or idx >= self.num_samples:
+            raise IndexError("Index out of bounds.")
+
+        # Determine which shard the index belongs to
+        shard_idx = 0
+        while (
+            shard_idx < len(self.db_shards)
+            and idx >= self.db_shards[shard_idx]["cumulative_entries"]
+        ):
+            shard_idx += 1
+
+        if shard_idx >= len(self.db_shards):
+            raise IndexError("Shard index out of bounds.")
+
+        shard_name = self.db_shards[shard_idx]["shard_name"]
+        target_shard_path = os.path.join(self.processed_dir, shard_name)
+        if shard_name not in self._db_connections:
+            self._db_connections[shard_name] = lmdb.open(
+                target_shard_path,
+                readonly=True,
+                lock=False,
+                readahead=False,
+                meminit=False,
+            )
+        env = self._db_connections[shard_name]
+
+        with env.begin() as txn:
+            # Calculate the local index within the shard
+            data_bytes = txn.get(f"{idx}".encode())
+            if data_bytes is None:
+                raise KeyError(f"Data for index {idx} not found in shard {shard_name}.")
+            return pickle.loads(data_bytes)  # noqa: S301
+
+    def __del__(self):
+        """Close all open LMDB connections when the dataset object is destroyed."""
+        for env in getattr(self, "_db_connections", {}).values():
+            env.close()
 
 
 if __name__ == "__main__":
