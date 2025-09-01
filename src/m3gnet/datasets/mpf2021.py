@@ -25,6 +25,10 @@ class MPF2021Dataset(Dataset):
     ]
     expected_number_of_trajectories = 62_783
     expected_number_of_structures = 187_687
+    precomputed_energy_mean = -184.374191  # eV
+    precomputed_energy_std = 188.891602  # eV
+    precomputed_energy_per_atom_mean = -5.974961  # eV/atom
+    precomputed_energy_per_atom_std = 1.860012  # eV/atom
 
     MAX_SHARD_SIZE_BYTES = 5 * 1024**3  # 5 GB
 
@@ -279,7 +283,6 @@ class MPF2021Dataset(Dataset):
             self._db_connections[shard_name] = lmdb.open(
                 target_shard_path,
                 readonly=True,
-                lock=False,
                 readahead=False,
                 meminit=False,
             )
