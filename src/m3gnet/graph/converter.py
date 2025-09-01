@@ -56,7 +56,7 @@ class GraphConverter:
         data_dict = {
             "total_num_atoms": torch.tensor(pos.shape[0], dtype=torch.long),
             "total_num_edges": torch.tensor(edge_index.shape[1], dtype=torch.long),
-            "pos": torch.tensor(pos, dtype=torch.float32, requires_grad=True),
+            "pos": torch.tensor(pos, dtype=torch.float32),
             "edge_index": torch.tensor(edge_index, dtype=torch.long),
             "edge_dist": torch.tensor(edge_dist, dtype=torch.float32),
             "edge_offsets": torch.tensor(edge_offsets, dtype=torch.float32),

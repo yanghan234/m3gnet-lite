@@ -25,6 +25,8 @@ dependencies = [
     "torchvision>=0.23.0",
     "torch-geometric>=2.6.1",
     "tqdm>=4.67.1",
+    "lmdb>=1.7.3",
+    "ijson>=3.4.0",
 ]
 
 [dependency-groups]
@@ -35,6 +37,7 @@ dev = [
     "pre-commit>=4.3.0",
     "pytest>=8.4.1",
     "ruff>=0.12.8",
+    "seaborn>=0.13.2",
 ]
 
 [build-system]
