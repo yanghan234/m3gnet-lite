@@ -1,3 +1,5 @@
+"""The core M3GNet model architecture."""
+
 import torch
 from torch import nn
 from torch_geometric.data import Data
@@ -9,6 +11,21 @@ from .layers.interaction import MainBlock
 
 
 class M3GNet(nn.Module):
+    """Core model architecture of M3GNet.
+
+    Args:
+        num_elements (int): Number of unique elements in the dataset. Default is 108.
+        num_blocks (int): Number of interaction blocks. Default is 4.
+        feature_dim (int): Dimension of the atomic features. Default is 128.
+        max_angular_l (int): Maximum angular momentum. Default is 4.
+        max_radial_n (int): Maximum number of radial basis functions. Default is 4.
+        cutoff (float): Cutoff distance for two-body interactions. Default is 5.0.
+        enable_three_body (bool): Whether to enable three-body interactions.
+            Default is True.
+        three_body_cutoff (float): Cutoff distance for three-body interactions.
+            Default is 4.0.
+    """
+
     def __init__(
         self,
         *,
@@ -20,9 +37,9 @@ class M3GNet(nn.Module):
         cutoff: float = 5.0,
         enable_three_body: bool = True,
         three_body_cutoff: float = 4.0,
-        device: str | torch.device = "cpu",
         **kwargs,
     ):
+        """Initialize the M3GNet model."""
         super().__init__()
 
         # save model parameters
@@ -34,7 +51,6 @@ class M3GNet(nn.Module):
         self.cutoff = cutoff
         self.enable_three_body = enable_three_body
         self.three_body_cutoff = three_body_cutoff
-        self.device = device
 
         # create model components
         self.atomic_embedding = AtomicEmbedding(num_elements, feature_dim)
@@ -64,10 +80,8 @@ class M3GNet(nn.Module):
             activation=["swish", "swish", None],
         )
 
-        # move model to device
-        self.to(device)
-
     def forward(self, data: Data, batch: torch.Tensor | None = None) -> torch.Tensor:
+        """Forward pass of the M3GNet model."""
         # 1. Add offset to the three_body_indices to make them global indices
         # The edge_indices were computed for each structure, and thus the indices in
         # the three_body_indices all start from 0. Thus, we need to add the cumsum
@@ -84,16 +98,14 @@ class M3GNet(nn.Module):
             ]
         )
         # Repeat each offset according to the number of angles in each structure
-        offsets = (
-            torch.repeat_interleave(offsets, data.total_num_angles)
-            .unsqueeze(1)
-            .to(data.three_body_indices.device)
-        )
+        offsets = torch.repeat_interleave(offsets, data.total_num_angles).unsqueeze(1)
         data.three_body_indices_with_offset = data.three_body_indices + offsets
 
         # 2. Compute the three-body angles, edge_distances, etc.
         batch = torch.repeat_interleave(
-            torch.arange(data.total_num_edges.shape[0]),
+            torch.arange(
+                data.total_num_edges.shape[0], device=data.total_num_edges.device
+            ),
             data.total_num_edges,
         )
         edge_offsets = torch.einsum(
@@ -109,7 +121,9 @@ class M3GNet(nn.Module):
         edge_ik_indices = data.three_body_indices_with_offset[:, 1]
 
         batch = torch.repeat_interleave(
-            torch.arange(data.total_num_atoms.shape[0]),
+            torch.arange(
+                data.total_num_atoms.shape[0], device=data.total_num_edges.device
+            ),
             data.total_num_edges,
         )
         edge_offsets = torch.einsum(
@@ -149,11 +163,15 @@ class M3GNet(nn.Module):
         energy_per_atom = self.energy_mlp(atomic_features).squeeze(-1)
 
         batch = torch.repeat_interleave(
-            torch.arange(data.total_num_atoms.shape[0], device=energy_per_atom.device),
+            torch.arange(
+                data.total_num_atoms.shape[0], device=data.total_num_atoms.device
+            ),
             data.total_num_atoms,
         )
         return torch.scatter_add(
-            torch.zeros(data.total_num_atoms.shape[0], device=energy_per_atom.device),
+            torch.zeros(
+                data.total_num_atoms.shape[0], device=data.total_num_atoms.device
+            ),
             dim=0,
             index=batch,
             src=energy_per_atom,
