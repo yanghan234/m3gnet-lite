@@ -33,6 +33,7 @@ dependencies = [
 dev = [
     "ipython>=9.4.0",
     "jupyter>=1.1.1",
+    "lightning>=2.5.4",
     "mattersim>=1.2.0",
     "pre-commit>=4.3.0",
     "pytest>=8.4.1",
