@@ -4,7 +4,7 @@ import lightning
 import torch
 from torch import nn
 
-from m3gnet import M3GNet
+from .m3gnet import M3GNet
 
 
 class LightningM3GNet(lightning.LightningModule):

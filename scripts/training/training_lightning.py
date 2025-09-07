@@ -22,8 +22,8 @@ if __name__ == "__main__":
         mpf2021_dataset, [train_size, val_size, test_size]
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=32)
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=4)
+    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=4)
 
     model = M3GNet()
     lightning_model = LightningM3GNet(

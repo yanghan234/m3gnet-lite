@@ -2,7 +2,7 @@
 
 from loguru import logger
 
-from .lightning import LightningM3GNet
 from .m3gnet import M3GNet
+from .lightning import LightningM3GNet
 
 __all__ = ["M3GNet", "LightningM3GNet"]
