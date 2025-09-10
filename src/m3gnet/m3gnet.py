@@ -82,14 +82,7 @@ class M3GNet(nn.Module):
 
     def forward(self, data: Data, batch: torch.Tensor | None = None) -> torch.Tensor:
         """Forward pass of the M3GNet model."""
-        # 1. Add offset to the three_body_indices to make them global indices
-        # The edge_indices were computed for each structure, and thus the indices in
-        # the three_body_indices all start from 0. Thus, we need to add the cumsum
-        # of the number of bonds in the previous structures to the indices in
-        # the three_body_indices.
-        # Please note, the edge_index attributes of the torch_geometric.data.Data object
-        # will be incremented automatically by the DataLoader, so there is no need to
-        # add the offset to the edge_index here.
+        # 1. Calculate offsets for three-body indices to make them global
         cumsum_edges = data.total_num_edges.cumsum(dim=0).detach()
         offsets = torch.cat(
             [
@@ -97,72 +90,59 @@ class M3GNet(nn.Module):
                 cumsum_edges[:-1],
             ]
         )
-        # Repeat each offset according to the number of angles in each structure
         offsets = torch.repeat_interleave(offsets, data.total_num_angles).unsqueeze(1)
-        data.three_body_indices_with_offset = data.three_body_indices + offsets
+        three_body_indices_with_offset = data.three_body_indices + offsets
 
-        # 2. Compute the three-body angles, edge_distances, etc.
-        batch = torch.repeat_interleave(
+        # 2. Compute edge and angle properties from graph structure
+        batch_map = torch.repeat_interleave(
             torch.arange(
                 data.total_num_edges.shape[0], device=data.total_num_edges.device
             ),
             data.total_num_edges,
         )
         edge_offsets = torch.einsum(
-            "ei, eij->ej", data.edge_offsets, data.cell.reshape(-1, 3, 3)[batch]
+            "ei, eij->ej", data.edge_offsets, data.cell.reshape(-1, 3, 3)[batch_map]
         )
         edge_vec = (
             data.pos[data.edge_index[1]] - data.pos[data.edge_index[0]] + edge_offsets
         )
         edge_dist = torch.norm(edge_vec, dim=1)
-        data.edge_dist = edge_dist
 
-        edge_ij_indices = data.three_body_indices_with_offset[:, 0]
-        edge_ik_indices = data.three_body_indices_with_offset[:, 1]
-
-        batch = torch.repeat_interleave(
-            torch.arange(
-                data.total_num_atoms.shape[0], device=data.total_num_edges.device
-            ),
-            data.total_num_edges,
-        )
-        edge_offsets = torch.einsum(
-            "ei, eij->ej", data.edge_offsets, data.cell.reshape(-1, 3, 3)[batch]
-        )
+        edge_ij_indices = three_body_indices_with_offset[:, 0]
+        edge_ik_indices = three_body_indices_with_offset[:, 1]
 
         vec_ij = edge_vec[edge_ij_indices]
         vec_ik = edge_vec[edge_ik_indices]
         norm_ik = edge_dist[edge_ik_indices]
-        data.norm_ik = norm_ik
 
         cos_angle = torch.sum(vec_ij * vec_ik, dim=1) / (
             torch.norm(vec_ij, dim=1) * torch.norm(vec_ik, dim=1)
         )
-        data.three_body_cos_angles = cos_angle
 
-        # 3. Get initial embeddings of atoms and edges.
+        # 3. Get initial embeddings of atoms and edges
         atomic_features = self.atomic_embedding(data.atomic_numbers)
-        edge_features = edge_features_0 = self.rbf(data.edge_dist)
-        edge_features = self.edge_encoding_mlp(edge_features)
+        edge_features_0 = self.rbf(edge_dist)
+        edge_features = self.edge_encoding_mlp(edge_features_0)
 
-        # 4. Get spherical harmonic and radial basis representations
-        # of three-body angles, which are used to compute the three-body interactions.
-        angle_features = self.shrb(data.norm_ik, data.three_body_cos_angles)
+        # 4. Get spherical harmonic and radial basis representations of angles
+        angle_features = self.shrb(norm_ik, cos_angle)
 
-        # 5. Message passing blocks with three-body interactions inside each block.
+        # 5. Message passing blocks
         for main_block in self.main_blocks:
             atomic_features, edge_features = main_block(
-                data,
                 atomic_features,
                 edge_features,
                 angle_features,
                 edge_features_0,
+                three_body_indices_with_offset,
+                data.edge_index,
+                edge_dist,
             )
 
-        # 6. Read out the energy per atom from final atomic features.
+        # 6. Read out the energy per atom from final atomic features
         energy_per_atom = self.energy_mlp(atomic_features).squeeze(-1)
 
-        batch = torch.repeat_interleave(
+        batch_map = torch.repeat_interleave(
             torch.arange(
                 data.total_num_atoms.shape[0], device=data.total_num_atoms.device
             ),
@@ -173,6 +153,6 @@ class M3GNet(nn.Module):
                 data.total_num_atoms.shape[0], device=data.total_num_atoms.device
             ),
             dim=0,
-            index=batch,
+            index=batch_map,
             src=energy_per_atom,
         )
