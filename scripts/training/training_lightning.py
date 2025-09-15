@@ -1,6 +1,7 @@
 """Script to train M3GNet model using PyTorch Lightning."""
 
 import lightning as lightning
+from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import random_split
 
 from m3gnet import LightningM3GNet
@@ -30,5 +31,6 @@ if __name__ == "__main__":
         model=model, include_forces=True, include_stresses=True
     )
 
-    trainer = lightning.Trainer(max_epochs=10, accelerator="auto")
+    wandb_logger = WandbLogger(project="m3gnet", log_model="all")
+    trainer = lightning.Trainer(max_epochs=10, accelerator="auto", logger=wandb_logger)
     trainer.fit(lightning_model, train_loader, val_loader)
