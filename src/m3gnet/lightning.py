@@ -2,6 +2,7 @@
 
 import lightning
 import torch
+from ase.units import GPa
 from torch import nn
 
 from .m3gnet import M3GNet
@@ -107,7 +108,7 @@ class LightningM3GNet(lightning.LightningModule):
         elif not self.include_forces and self.include_stresses:
             # Compute stressesm, shape (B, 3, 3)
             stresses = torch.autograd.grad(pred.sum(), strain, create_graph=True)[0]
-            stresses = stresses / volumes.view(-1, 1, 1)
+            stresses = stresses / volumes.view(-1, 1, 1) / GPa
             loss_s = nn.functional.mse_loss(stresses, batch.stress.view(-1, 3, 3))
             loss = loss + loss_s * self.loss_stresses_weight
             self.log("train/s_loss", loss_s)
@@ -118,7 +119,7 @@ class LightningM3GNet(lightning.LightningModule):
             )
             forces = -forces
             loss_f = nn.functional.mse_loss(forces, batch.forces)
-            stresses = stresses / volumes.view(-1, 1, 1)
+            stresses = stresses / volumes.view(-1, 1, 1) / GPa
             loss_s = nn.functional.mse_loss(stresses, batch.stress.view(-1, 3, 3))
             loss = (
                 loss
@@ -200,7 +201,7 @@ class LightningM3GNet(lightning.LightningModule):
             elif not self.include_forces and self.include_stresses:
                 # Compute stressesm, shape (B, 3, 3)
                 stresses = torch.autograd.grad(pred.sum(), strain, create_graph=True)[0]
-                stresses = stresses / volumes.view(-1, 1, 1)
+                stresses = stresses / volumes.view(-1, 1, 1) / GPa
                 loss_s = nn.functional.mse_loss(stresses, batch.stress.view(-1, 3, 3))
                 loss = loss + loss_s * self.loss_stresses_weight
                 self.log("train/s_loss", loss_s)
@@ -211,7 +212,7 @@ class LightningM3GNet(lightning.LightningModule):
                 )
                 forces = -forces
                 loss_f = nn.functional.mse_loss(forces, batch.forces)
-                stresses = stresses / volumes.view(-1, 1, 1)
+                stresses = stresses / volumes.view(-1, 1, 1) / GPa
                 loss_s = nn.functional.mse_loss(stresses, batch.stress.view(-1, 3, 3))
                 loss = (
                     loss
