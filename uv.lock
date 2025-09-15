@@ -1577,6 +1577,7 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
     { name = "seaborn" },
+    { name = "wandb" },
 ]
 
 [package.metadata]
@@ -1603,6 +1604,7 @@ dev = [
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "ruff", specifier = ">=0.12.8" },
     { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "wandb", specifier = ">=0.21.1" },
 ]
 
 [[package]]
