@@ -2,7 +2,6 @@
 
 import torch
 from torch import nn
-from torch_geometric.data import Data
 
 from .common import MLP, GatedMLP, LinearLayer
 
@@ -85,36 +84,42 @@ class MainBlock(nn.Module):
 
     def forward(
         self,
-        data: Data,
         atomic_features: torch.Tensor,
         edge_features: torch.Tensor,
         angle_features: torch.Tensor,
         initial_edge_features: torch.Tensor,
+        three_body_indices_with_offset: torch.Tensor,
+        edge_index: torch.Tensor,
+        edge_dist: torch.Tensor,
     ) -> torch.Tensor:
         """Forward pass for the main interaction block.
 
         Args:
-            data (Data): The data object.
             atomic_features (torch.Tensor): The atomic features.
             edge_features (torch.Tensor): The edge features.
             angle_features (torch.Tensor): The angle features.
             initial_edge_features (torch.Tensor): The initial edge features.
+            three_body_indices_with_offset (torch.Tensor): Three-body indices.
+            edge_index (torch.Tensor): Edge indices.
+            edge_dist (torch.Tensor): Edge distances.
 
         Returns:
             torch.Tensor: The updated atomic and edge features.
         """
         edge_features = self.three_body_interaction(
-            data,
             atomic_features,
             edge_features,
             angle_features,
+            three_body_indices_with_offset,
+            edge_index,
+            edge_dist,
         )
 
         # vectorize the edge update
         concat_features = torch.cat(
             [
-                atomic_features[data.edge_index[0]],  # (num_edges, feature_dim)
-                atomic_features[data.edge_index[1]],  # (num_edges, feature_dim)
+                atomic_features[edge_index[0]],  # (num_edges, feature_dim)
+                atomic_features[edge_index[1]],  # (num_edges, feature_dim)
                 edge_features,  # (num_edges, feature_dim)
             ],
             dim=-1,
@@ -130,8 +135,8 @@ class MainBlock(nn.Module):
 
         concat_features = torch.cat(
             [
-                atomic_features[data.edge_index[0]],  # (num_edges, feature_dim)
-                atomic_features[data.edge_index[1]],  # (num_edges, feature_dim)
+                atomic_features[edge_index[0]],  # (num_edges, feature_dim)
+                atomic_features[edge_index[1]],  # (num_edges, feature_dim)
                 edge_features,  # (num_edges, feature_dim)
             ],
             dim=-1,
@@ -146,7 +151,7 @@ class MainBlock(nn.Module):
         atomic_features = torch.scatter_add(
             atomic_features,
             dim=0,
-            index=data.edge_index[0].unsqueeze(-1).expand(-1, self.feature_dim),
+            index=edge_index[0].unsqueeze(-1).expand(-1, self.feature_dim),
             src=atom_updates,
         )
 
@@ -199,21 +204,22 @@ class ThreeBodyInteraction(nn.Module):
     # def forward(self, data: Data, batch: torch.Tensor | None = None) -> torch.Tensor:
     def forward(
         self,
-        data: Data,
         atomic_features: torch.Tensor,
         edge_features: torch.Tensor,
         angle_features: torch.Tensor,
+        three_body_indices_with_offset: torch.Tensor,
+        edge_index: torch.Tensor,
+        edge_dist: torch.Tensor,
     ) -> torch.Tensor:
         """Forward pass for the three-body interaction layer.
 
         Args:
-            data (Data): The data object containing the graph structure.
-            atomic_features (torch.Tensor): The atomic features.
-                Dimension: (num_nodes, feature_dim)
-            edge_features (torch.Tensor): The edge features.
-                Dimension: (num_edges, feature_dim)
-            angle_features (torch.Tensor): The angle features.
-                Dimension: (num_angles, feature_dim)
+            atomic_features (torch.Tensor): Atomic features.
+            edge_features (torch.Tensor): Edge features.
+            angle_features (torch.Tensor): Angle features.
+            three_body_indices_with_offset (torch.Tensor): Three-body indices.
+            edge_index (torch.Tensor): Edge indices.
+            edge_dist (torch.Tensor): Edge distances.
 
         Returns:
             torch.Tensor: The three-body interaction.
@@ -222,32 +228,28 @@ class ThreeBodyInteraction(nn.Module):
         atomic_filter = self.atom_mlp(atomic_features)
 
         # Extract edge indices once to avoid repeated indexing
-        edge_ij_indices = data.three_body_indices_with_offset[
-            :, 0
-        ]  # Shape: [num_angles]
-        edge_ik_indices = data.three_body_indices_with_offset[
-            :, 1
-        ]  # Shape: [num_angles]
+        edge_ij_indices = three_body_indices_with_offset[:, 0]  # Shape: [num_angles]
+        edge_ik_indices = three_body_indices_with_offset[:, 1]  # Shape: [num_angles]
 
         # Get atomic filters for the central atoms (more efficient indexing)
         atomic_filter_k = atomic_filter[
-            data.edge_index[1, edge_ik_indices]
+            edge_index[1, edge_ik_indices]
         ]  # Shape: [num_angles, angle_feature_dim]
 
         # Compute envelope functions for both edges
         envelope_ij = envelope_polynomial(
-            data.edge_dist[edge_ij_indices], self.three_body_cutoff
+            edge_dist[edge_ij_indices], self.three_body_cutoff
         ).unsqueeze(-1)  # Shape: [num_angles, 1]
         envelope_ik = envelope_polynomial(
-            data.edge_dist[edge_ik_indices], self.three_body_cutoff
+            edge_dist[edge_ik_indices], self.three_body_cutoff
         ).unsqueeze(-1)  # Shape: [num_angles, 1]
 
         masks = atomic_filter_k * envelope_ij * envelope_ik
 
         # Vectorized accumulation of masked angle features
         edge_feature_ij_tilde = torch.zeros(
-            [data.edge_index.shape[1], self.angle_feature_dim],
-            device=data.edge_index.device,
+            [edge_index.shape[1], self.angle_feature_dim],
+            device=edge_index.device,
         )
 
         # Apply masks to angle features (element-wise multiplication)
