@@ -118,6 +118,12 @@ class M3GNet(nn.Module):
         cos_angle = torch.sum(vec_ij * vec_ik, dim=1) / (
             torch.norm(vec_ij, dim=1) * torch.norm(vec_ik, dim=1)
         )
+        # Numerical noise near ±1 would otherwise make acos unstable.
+        cos_angle = cos_angle.clamp(
+            -1.0 + torch.finfo(cos_angle.dtype).eps,
+            1.0 - torch.finfo(cos_angle.dtype).eps,
+        )
+        theta = torch.acos(cos_angle)
 
         # 3. Get initial embeddings of atoms and edges
         atomic_features = self.atomic_embedding(data.atomic_numbers)
@@ -125,7 +131,7 @@ class M3GNet(nn.Module):
         edge_features = self.edge_encoding_mlp(edge_features_0)
 
         # 4. Get spherical harmonic and radial basis representations of angles
-        angle_features = self.shrb(norm_ik, cos_angle)
+        angle_features = self.shrb(norm_ik, theta)
 
         # 5. Message passing blocks
         for main_block in self.main_blocks:
