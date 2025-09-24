@@ -74,14 +74,14 @@ class AtomicScaling(nn.Module):
         self,
         *,
         atomic_numbers: torch.Tensor,
-        normalized_atomic_energies: torch.Tensor,
+        atomic_energies: torch.Tensor,
     ):
         """Denormalize atomic energies.
 
         Args:
             atomic_numbers (torch.Tensor):
                 Tensor of shape (N,) containing atomic numbers.
-            normalized_atomic_energies (torch.Tensor):
+            atomic_energies (torch.Tensor):
                 Tensor of shape (N,) containing normalized atomic energies.
 
         Returns:
@@ -89,7 +89,7 @@ class AtomicScaling(nn.Module):
         """
         shifts = self.shift[atomic_numbers]
         scales = self.scale[atomic_numbers]
-        return normalized_atomic_energies * scales + shifts
+        return atomic_energies * scales + shifts
 
     def forward(
         self,
