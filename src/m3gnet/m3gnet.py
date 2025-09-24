@@ -80,7 +80,7 @@ class M3GNet(nn.Module):
             output_dim=[feature_dim, feature_dim, 1],
             activation=["swish", "swish", None],
         )
-        self.normalizer = AtomicScaling(num_elements, trainable=True)
+        self.normalizer = AtomicScaling(num_elements=self.num_elements, trainable=True)
 
     def forward(self, data: Data, batch: torch.Tensor | None = None) -> torch.Tensor:
         """Forward pass of the M3GNet model."""
