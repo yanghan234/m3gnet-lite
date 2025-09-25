@@ -8,6 +8,7 @@ from .layers.basis import SmoothBesselBasis, SphericalHarmonicAndRadialBasis
 from .layers.common import MLP
 from .layers.embedding import AtomicEmbedding
 from .layers.interaction import MainBlock
+from .layers.scaling import AtomicScaling
 
 
 class M3GNet(nn.Module):
@@ -79,6 +80,7 @@ class M3GNet(nn.Module):
             output_dim=[feature_dim, feature_dim, 1],
             activation=["swish", "swish", None],
         )
+        self.normalizer = AtomicScaling(num_elements=self.num_elements, trainable=True)
 
     def forward(self, data: Data, batch: torch.Tensor | None = None) -> torch.Tensor:
         """Forward pass of the M3GNet model."""
@@ -147,6 +149,10 @@ class M3GNet(nn.Module):
 
         # 6. Read out the energy per atom from final atomic features
         energy_per_atom = self.energy_mlp(atomic_features).squeeze(-1)
+        energy_per_atom_denormalized = self.normalizer(
+            atomic_numbers=data.atomic_numbers,
+            atomic_energies=energy_per_atom,
+        )
 
         batch_map = torch.repeat_interleave(
             torch.arange(
@@ -160,5 +166,5 @@ class M3GNet(nn.Module):
             ),
             dim=0,
             index=batch_map,
-            src=energy_per_atom,
+            src=energy_per_atom_denormalized,
         )
