@@ -62,9 +62,9 @@ class LightningM3GNet(lightning.LightningModule):
             self.forces_loss_fn = nn.MSELoss()
             self.stresses_loss_fn = nn.MSELoss()
         else:  # huber
-            self.energy_loss_fn = nn.HuberLoss()
-            self.forces_loss_fn = nn.HuberLoss()
-            self.stresses_loss_fn = nn.HuberLoss()
+            self.energy_loss_fn = nn.HuberLoss(delta=0.01)
+            self.forces_loss_fn = nn.HuberLoss(delta=0.01)
+            self.stresses_loss_fn = nn.HuberLoss(delta=0.01)
         self.save_hyperparameters(ignore=["model"])
 
     def training_step(self, batch):
