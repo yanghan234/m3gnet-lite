@@ -18,8 +18,8 @@ def envelope_polynomial(x: torch.Tensor, cutoff: float) -> torch.Tensor:
     Returns:
         torch.Tensor: The envelope polynomial.
     """
-    return 1 - 6 * (x / cutoff) ** 5 + 15 * (x / cutoff) ** 4 - 10 * (x / cutoff) ** 3
-
+    results = 1 - 6 * (x / cutoff) ** 5 + 15 * (x / cutoff) ** 4 - 10 * (x / cutoff) ** 3
+    return torch.clamp(results, min=0.0)
 
 class MainBlock(nn.Module):
     """The main interaction block for M3GNet."""
