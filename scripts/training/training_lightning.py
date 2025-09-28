@@ -2,7 +2,9 @@
 
 import lightning as lightning
 from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.callbacks import ModelCheckpoint
 from torch.utils.data import random_split
+from loguru import logger
 
 from m3gnet import LightningM3GNet
 import argparse
@@ -19,10 +21,17 @@ def main():
     parser.add_argument("--gradient-clip-algorithm", type=str, default="norm", help="Gradient clipping algorithm (e.g., 'norm', 'value')")
     parser.add_argument("--num-workers", type=int, default=4, help="Number of workers for data loading")
     parser.add_argument("--accelerator", type=str, default="auto", help="Accelerator to use (e.g., 'cpu', 'gpu', 'mps', 'auto')")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
-    parser.add_argument("--include-forces", action="store_true", help="Whether to include forces in the training")
-    parser.add_argument("--include-stresses", action="store_true", help="Whether to include stresses in the training")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility, default is 42.")
+    parser.add_argument("--include-forces", action=argparse.BooleanOptionalAction, help="Whether to include forces in the training", default=True)
+    parser.add_argument("--include-stresses", action=argparse.BooleanOptionalAction, help="Whether to include stresses in the training", default=True)
+    parser.add_argument("--scheduler", type=str, default="OneCycleLR", choices=["StepLR", "OneCycleLR"], help="Type of learning rate scheduler to use")
+    parser.add_argument("--step-scheduler-gamma", type=float, default=0.9, help="Gamma value for StepLR scheduler")
+    parser.add_argument("--step-scheduler-step-size", type=int, default=10, help="Step size in terms of epochs for StepLR scheduler")
+    parser.add_argument("--onecycle-scheduler-pct-start", type=float, default=0.1, help="Percentage of the cycle spent increasing the learning rate for OneCycleLR scheduler")
+    parser.add_argument("--onecycle-scheduler-anneal-strategy", type=str, default="cos", choices=["cos", "linear"], help="Annealing strategy for OneCycleLR scheduler")
     args = parser.parse_args()
+
+    logger.info(f"Training configuration: {args}")
 
     from torch_geometric.loader import DataLoader
     from m3gnet import M3GNet
@@ -49,18 +58,34 @@ def main():
         include_forces=args.include_forces,
         include_stresses=args.include_stresses,
         learning_rate=args.learning_rate,
-        weight_decay=args.weight_decay
+        weight_decay=args.weight_decay,
+        scheduler=args.scheduler,
+        step_scheduler_gamma=args.step_scheduler_gamma,
+        step_scheduler_step_size=args.step_scheduler_step_size,
+        onecycle_scheduler_pct_start=args.onecycle_scheduler_pct_start,
+        onecycle_scheduler_anneal_strategy=args.onecycle_scheduler_anneal_strategy,
     )
 
     run_name = f"m3gnet_lr{args.learning_rate}_wd{args.weight_decay}_bs{args.batch_size}_epochs{args.max_epochs}_seed{args.seed}"
 
     wandb_logger = WandbLogger(project=args.project, log_model=args.log_model, name=run_name)
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=f"checkpoints/{run_name}",
+        filename="epoch-{epoch:04d}_val-loss{val_loss:8.4e}",
+        monitor="val/loss",
+        mode="min",
+        save_top_k=5,
+        save_last=True,
+        every_n_epochs=1,
+    )
+    
     trainer = lightning.Trainer(
         max_epochs=args.max_epochs,
         accelerator=args.accelerator,
         logger=wandb_logger,
         gradient_clip_val=args.gradient_clip_val,
-        gradient_clip_algorithm=args.gradient_clip_algorithm
+        gradient_clip_algorithm=args.gradient_clip_algorithm,
+        callbacks=[checkpoint_callback],
     )
     trainer.fit(lightning_model, train_loader, val_loader)
 
