@@ -5,6 +5,7 @@ import torch
 from ase.units import GPa
 from torch import nn
 from typing import Literal
+from loguru import logger
 
 from .m3gnet import M3GNet
 
@@ -39,6 +40,11 @@ class LightningM3GNet(lightning.LightningModule):
         loss_stresses_weight: float = 0.1,
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-2,
+        scheduler: Literal["StepLR", "OneCycleLR"] = "OneCycleLR",
+        step_scheduler_gamma: float = 0.9,
+        step_scheduler_step_size: int = 10,
+        onecycle_scheduler_pct_start: float = 0.1,
+        onecycle_scheduler_anneal_strategy: str = 'cos',
         loss: Literal["l1", "mse", "huber"] = "huber",
     ):
         """Initialize the LightningM3GNet module."""
@@ -50,6 +56,26 @@ class LightningM3GNet(lightning.LightningModule):
         self.loss_stresses_weight = loss_stresses_weight
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.scheduler = scheduler
+        self.step_scheduler_gamma = step_scheduler_gamma
+        self.step_scheduler_step_size = step_scheduler_step_size
+        self.onecycle_scheduler_pct_start = onecycle_scheduler_pct_start
+        self.onecycle_scheduler_anneal_strategy = onecycle_scheduler_anneal_strategy
+        if self.scheduler == "StepLR":
+            logger.warning(
+                f"Using StepLR scheduler, with gamma={self.step_scheduler_gamma} "
+                f"and step_size={self.step_scheduler_step_size}. "
+                "OneCycleLR related arguments will be ignored."
+            )
+        elif self.scheduler == "OneCycleLR":
+            logger.warning(
+                "Using OneCycleLR scheduler, "
+                f"with pct_start={self.onecycle_scheduler_pct_start} "
+                f"and anneal_strategy={self.onecycle_scheduler_anneal_strategy}. "
+                "StepLR related arguments will be ignored."
+            )
+        else:
+            raise ValueError("Scheduler must be one of 'StepLR' or 'OneCycleLR'.")
         self.loss = loss
         if loss.lower() not in ["l1", "mse", "huber"]:
             raise ValueError("Loss must be one of 'l1', 'mse', or 'huber'.")
@@ -277,12 +303,29 @@ class LightningM3GNet(lightning.LightningModule):
         optimizer = torch.optim.AdamW(
             self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
         )
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "interval": "epoch",
-                "frequency": 1,
-            },
-        }
+        if self.scheduler == "StepLR":
+            scheduler = torch.optim.lr_scheduler.StepLR(
+                optimizer,
+                step_size=self.step_scheduler_step_size,
+                gamma=self.step_scheduler_gamma
+            )
+        else:
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                optimizer, 
+                max_lr=self.learning_rate,
+                total_steps=self.trainer.estimated_stepping_batches,
+                pct_start=self.onecycle_scheduler_pct_start,
+                anneal_strategy=self.onecycle_scheduler_anneal_strategy
+            )
+        return (
+            [optimizer],
+            [
+                {
+                    "scheduler": scheduler, 
+                    "interval": "epoch" if self.scheduler == "StepLR" else "step",
+                    "frequency": 1,
+                    "name": self.scheduler.lower()
+                }
+            ]
+        )
+        
