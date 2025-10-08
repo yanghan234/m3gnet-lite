@@ -71,14 +71,13 @@ def main():
     wandb_logger = WandbLogger(project=args.project, log_model=args.log_model, name=run_name)
     checkpoint_callback = ModelCheckpoint(
         dirpath=f"checkpoints/{run_name}",
-        filename="epoch-{epoch:04d}_val-loss{val_loss:8.4e}",
-        monitor="val/loss",
+        filename="{epoch:04d}-{val_loss:.4e}",
+        monitor="val_loss",
         mode="min",
         save_top_k=5,
         save_last=True,
         every_n_epochs=1,
     )
-    
     trainer = lightning.Trainer(
         max_epochs=args.max_epochs,
         accelerator=args.accelerator,

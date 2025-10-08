@@ -142,10 +142,10 @@ class LightningM3GNet(lightning.LightningModule):
         pred_energy_pa = pred.view(-1, 1) / num_atoms
         reference_energy_pa = batch.energy.view(-1, 1) / num_atoms
         loss = loss_e = self.energy_loss_fn(pred_energy_pa, reference_energy_pa)
-        self.log("train/e_loss", loss_e)
-        self.log("train/e_loss_weighted", loss_e)
-        self.log("train/e_mse_loss", nn.functional.mse_loss(pred_energy_pa, reference_energy_pa))
-        self.log("train/e_mae_loss", nn.functional.l1_loss(pred_energy_pa, reference_energy_pa))
+        self.log("train_e_loss", loss_e)
+        self.log("train_e_loss_weighted", loss_e)
+        self.log("train_e_mse_loss", nn.functional.mse_loss(pred_energy_pa, reference_energy_pa))
+        self.log("train_e_mae_loss", nn.functional.l1_loss(pred_energy_pa, reference_energy_pa))
 
         if not self.include_forces and not self.include_stresses:
             pass
@@ -156,20 +156,20 @@ class LightningM3GNet(lightning.LightningModule):
             loss_f = self.forces_loss_fn(forces, batch.forces)
             # loss_f = nn.functional.huber_loss(forces, batch.forces)
             loss = loss + loss_f * self.loss_forces_weight
-            self.log("train/f_loss", loss_f)
-            self.log("train/f_loss_weighted", loss_f * self.loss_forces_weight)
-            self.log("train/f_mse_loss", nn.functional.mse_loss(forces, batch.forces))
-            self.log("train/f_mae_loss", nn.functional.l1_loss(forces, batch.forces))
+            self.log("train_f_loss", loss_f)
+            self.log("train_f_loss_weighted", loss_f * self.loss_forces_weight)
+            self.log("train_f_mse_loss", nn.functional.mse_loss(forces, batch.forces))
+            self.log("train_f_mae_loss", nn.functional.l1_loss(forces, batch.forces))
         elif not self.include_forces and self.include_stresses:
             # Compute stressesm, shape (B, 3, 3)
             stresses = torch.autograd.grad(pred.sum(), strain, create_graph=True)[0]
             stresses = stresses / volumes.view(-1, 1, 1) / GPa
             loss_s = self.stresses_loss_fn(stresses, batch.stress.view(-1, 3, 3))
             loss = loss + loss_s * self.loss_stresses_weight
-            self.log("train/s_loss", loss_s)
-            self.log("train/s_loss_weighted", loss_s * self.loss_stresses_weight)
-            self.log("train/s_mse_loss", nn.functional.mse_loss(stresses, batch.stress.view(-1, 3, 3)))
-            self.log("train/s_mae_loss", nn.functional.l1_loss(stresses, batch.stress.view(-1, 3, 3)))
+            self.log("train_s_loss", loss_s)
+            self.log("train_s_loss_weighted", loss_s * self.loss_stresses_weight)
+            self.log("train_s_mse_loss", nn.functional.mse_loss(stresses, batch.stress.view(-1, 3, 3)))
+            self.log("train_s_mae_loss", nn.functional.l1_loss(stresses, batch.stress.view(-1, 3, 3)))
         else:  # include both forces and stresses
             forces, stresses = torch.autograd.grad(
                 pred.sum(), [pos_for_grad, strain], create_graph=True
@@ -183,15 +183,15 @@ class LightningM3GNet(lightning.LightningModule):
                 + loss_f * self.loss_forces_weight
                 + loss_s * self.loss_stresses_weight
             )
-            self.log("train/f_loss", loss_f)
-            self.log("train/f_loss_weighted", loss_f * self.loss_forces_weight)
-            self.log("train/f_mse_loss", nn.functional.mse_loss(forces, batch.forces))
-            self.log("train/f_mae_loss", nn.functional.l1_loss(forces, batch.forces))
-            self.log("train/s_loss", loss_s)
-            self.log("train/s_loss_weighted", loss_s * self.loss_stresses_weight)
-            self.log("train/s_mse_loss", nn.functional.mse_loss(stresses, batch.stress.view(-1, 3, 3)))
-            self.log("train/s_mae_loss", nn.functional.l1_loss(stresses, batch.stress.view(-1, 3, 3)))
-        self.log("train/loss", loss)
+            self.log("train_f_loss", loss_f)
+            self.log("train_f_loss_weighted", loss_f * self.loss_forces_weight)
+            self.log("train_f_mse_loss", nn.functional.mse_loss(forces, batch.forces))
+            self.log("train_f_mae_loss", nn.functional.l1_loss(forces, batch.forces))
+            self.log("train_s_loss", loss_s)
+            self.log("train_s_loss_weighted", loss_s * self.loss_stresses_weight)
+            self.log("train_s_mse_loss", nn.functional.mse_loss(stresses, batch.stress.view(-1, 3, 3)))
+            self.log("train_s_mae_loss", nn.functional.l1_loss(stresses, batch.stress.view(-1, 3, 3)))
+        self.log("train_loss", loss)
         return loss
 
     def validation_step(self, batch):
@@ -247,10 +247,10 @@ class LightningM3GNet(lightning.LightningModule):
             reference_energy_pa = batch.energy.view(-1, 1) / num_atoms
             # loss = loss_e = nn.functional.l1_loss(pred_energy_pa, reference_energy_pa)
             loss = loss_e = self.energy_loss_fn(pred_energy_pa, reference_energy_pa)
-            self.log("val/e_loss", loss_e)
-            self.log("val/e_loss_weighted", loss_e)
-            self.log("val/e_mse_loss", nn.functional.mse_loss(pred_energy_pa, reference_energy_pa))
-            self.log("val/e_mae_loss", nn.functional.l1_loss(pred_energy_pa, reference_energy_pa))
+            self.log("val_e_loss", loss_e)
+            self.log("val_e_loss_weighted", loss_e)
+            self.log("val_e_mse_loss", nn.functional.mse_loss(pred_energy_pa, reference_energy_pa))
+            self.log("val_e_mae_loss", nn.functional.l1_loss(pred_energy_pa, reference_energy_pa))
 
             if not self.include_forces and not self.include_stresses:
                 pass
@@ -260,20 +260,20 @@ class LightningM3GNet(lightning.LightningModule):
                 )[0]
                 loss_f = nn.functional.huber_loss(forces, batch.forces)
                 loss = loss + loss_f * self.loss_forces_weight
-                self.log("val/f_loss", loss_f)
-                self.log("val/f_loss_weighted", loss_f * self.loss_forces_weight)
-                self.log("val/f_mse_loss", nn.functional.mse_loss(forces, batch.forces))
-                self.log("val/f_mae_loss", nn.functional.l1_loss(forces, batch.forces))
+                self.log("val_f_loss", loss_f)
+                self.log("val_f_loss_weighted", loss_f * self.loss_forces_weight)
+                self.log("val_f_mse_loss", nn.functional.mse_loss(forces, batch.forces))
+                self.log("val_f_mae_loss", nn.functional.l1_loss(forces, batch.forces))
             elif not self.include_forces and self.include_stresses:
                 # Compute stressesm, shape (B, 3, 3)
                 stresses = torch.autograd.grad(pred.sum(), strain, create_graph=True)[0]
                 stresses = stresses / volumes.view(-1, 1, 1) / GPa
                 loss_s = nn.functional.huber_loss(stresses, batch.stress.view(-1, 3, 3))
                 loss = loss + loss_s * self.loss_stresses_weight
-                self.log("val/s_loss", loss_s)
-                self.log("val/s_loss_weighted", loss_s * self.loss_stresses_weight)
-                self.log("val/s_mse_loss", nn.functional.mse_loss(stresses, batch.stress.view(-1, 3, 3)))
-                self.log("val/s_mae_loss", nn.functional.l1_loss(stresses, batch.stress.view(-1, 3, 3)))
+                self.log("val_s_loss", loss_s)
+                self.log("val_s_loss_weighted", loss_s * self.loss_stresses_weight)
+                self.log("val_s_mse_loss", nn.functional.mse_loss(stresses, batch.stress.view(-1, 3, 3)))
+                self.log("val_s_mae_loss", nn.functional.l1_loss(stresses, batch.stress.view(-1, 3, 3)))
             else:  # include both forces and stresses
                 forces, stresses = torch.autograd.grad(
                     pred.sum(), [pos_for_grad, strain], create_graph=True
@@ -287,15 +287,15 @@ class LightningM3GNet(lightning.LightningModule):
                     + loss_f * self.loss_forces_weight
                     + loss_s * self.loss_stresses_weight
                 )
-                self.log("val/f_loss", loss_f)
-                self.log("val/f_loss_weighted", loss_f * self.loss_forces_weight)
-                self.log("val/f_mse_loss", nn.functional.mse_loss(forces, batch.forces))
-                self.log("val/f_mae_loss", nn.functional.l1_loss(forces, batch.forces))
-                self.log("val/s_loss", loss_s)
-                self.log("val/s_loss_weighted", loss_s * self.loss_stresses_weight)
-                self.log("val/s_mse_loss", nn.functional.mse_loss(stresses, batch.stress.view(-1, 3, 3)))
-                self.log("val/s_mae_loss", nn.functional.l1_loss(stresses, batch.stress.view(-1, 3, 3)))
-            self.log("val/loss", loss)
+                self.log("val_f_loss", loss_f)
+                self.log("val_f_loss_weighted", loss_f * self.loss_forces_weight)
+                self.log("val_f_mse_loss", nn.functional.mse_loss(forces, batch.forces))
+                self.log("val_f_mae_loss", nn.functional.l1_loss(forces, batch.forces))
+                self.log("val_s_loss", loss_s)
+                self.log("val_s_loss_weighted", loss_s * self.loss_stresses_weight)
+                self.log("val_s_mse_loss", nn.functional.mse_loss(stresses, batch.stress.view(-1, 3, 3)))
+                self.log("val_s_mae_loss", nn.functional.l1_loss(stresses, batch.stress.view(-1, 3, 3)))
+            self.log("val_loss", loss)
         return loss
 
     def configure_optimizers(self):
